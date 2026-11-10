@@ -65,9 +65,12 @@ com.musicreview.server
 
 처음 한 번 DB를 만듭니다.
 
-```bash
-mysql -u root -p < docs/schema.sql
+```powershell
+# PowerShell (프로젝트 폴더에서 실행)
+mysql -u root -p -e "source docs/schema.sql"
 ```
+
+> cmd나 Git Bash에서는 `mysql -u root -p < docs/schema.sql`도 됩니다. PowerShell은 `<`를 지원하지 않습니다.
 
 환경변수를 넣고 실행합니다. (PowerShell 기준)
 

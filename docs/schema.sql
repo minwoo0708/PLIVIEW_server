@@ -1,5 +1,6 @@
 -- 음악·플리 리뷰 앱 MySQL 8.4 스키마 (docs/API.md 기준)
--- 실행: mysql -u root -p < docs/schema.sql
+-- 실행 (PowerShell): mysql -u root -p -e "source docs/schema.sql"
+-- 실행 (cmd/bash):   mysql -u root -p < docs/schema.sql
 
 CREATE DATABASE IF NOT EXISTS music_review
   DEFAULT CHARACTER SET utf8mb4
