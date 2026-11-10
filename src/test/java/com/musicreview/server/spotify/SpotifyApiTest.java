@@ -49,7 +49,18 @@ class SpotifyApiTest extends ApiTestSupport {
         });
         FAKE_SPOTIFY.createContext("/v1", exchange -> {
             API_REQUESTS.add(exchange.getRequestURI().getRawPath() + "?" + exchange.getRequestURI().getRawQuery());
-            if (!"Bearer app-token".equals(exchange.getRequestHeaders().getFirst("Authorization"))) {
+            String auth = exchange.getRequestHeaders().getFirst("Authorization");
+            if ("/v1/me".equals(exchange.getRequestURI().getPath())) {
+                // 사용자 Spotify 토큰으로 계정 확인 (연동)
+                switch (String.valueOf(auth)) {
+                    case "Bearer user-token-alice" -> respond(exchange, 200, "{\"id\":\"alice_sp\",\"display_name\":\"Alice\"}");
+                    case "Bearer user-token-noname" -> respond(exchange, 200, "{\"id\":\"noname_sp\",\"display_name\":null}");
+                    case "Bearer not-allowlisted" -> respond(exchange, 403, "{}");
+                    default -> respond(exchange, 401, "{}");
+                }
+                return;
+            }
+            if (!"Bearer app-token".equals(auth)) {
                 respond(exchange, 401, "{}");
                 return;
             }
@@ -149,6 +160,59 @@ class SpotifyApiTest extends ApiTestSupport {
         return mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/spotify/search")
                 .param("q", q).param("type", type).param("limit", limit)
                 .header("Authorization", "Bearer " + token));
+    }
+
+    @Test
+    @DisplayName("Spotify 연동: 계정 확인 후 저장, 프로필에도 표시, 해제하면 null")
+    void linkAndUnlink() throws Exception {
+        putJson("/api/users/me/spotify", token, "{\"spotifyAccessToken\":\"user-token-alice\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.spotify.userId").value("alice_sp"))
+                .andExpect(jsonPath("$.spotify.displayName").value("Alice"));
+
+        long myId = ((Number) read(getJson("/api/users/me", token)
+                .andExpect(jsonPath("$.spotify.userId").value("alice_sp")), "$.id")).longValue();
+        getJson("/api/users/" + myId + "/reviews", token)
+                .andExpect(jsonPath("$.user.spotify.displayName").value("Alice"));
+
+        // 같은 계정으로 다시 연동해도 그대로 성공
+        putJson("/api/users/me/spotify", token, "{\"spotifyAccessToken\":\"user-token-alice\"}")
+                .andExpect(status().isOk());
+
+        deleteJson("/api/users/me/spotify", token, null)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.spotify").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("이미 다른 PLIVIEW 계정에 연동된 Spotify 계정이면 409")
+    void alreadyLinked() throws Exception {
+        putJson("/api/users/me/spotify", token, "{\"spotifyAccessToken\":\"user-token-alice\"}").andExpect(status().isOk());
+        putJson("/api/users/me/spotify", signupAndGetToken("다른사람"), "{\"spotifyAccessToken\":\"user-token-alice\"}")
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("SPOTIFY_ALREADY_LINKED"));
+    }
+
+    @Test
+    @DisplayName("잘못된 토큰 401, 개발 모드 미등록 계정 401(안내 문구), display_name 없으면 id로 표시")
+    void linkErrors() throws Exception {
+        putJson("/api/users/me/spotify", token, "{\"spotifyAccessToken\":\"expired\"}")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.code").value("SPOTIFY_TOKEN_INVALID"));
+        putJson("/api/users/me/spotify", token, "{\"spotifyAccessToken\":\"not-allowlisted\"}")
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("대시보드")));
+        putJson("/api/users/me/spotify", token, "{\"spotifyAccessToken\":\" \"}")
+                .andExpect(status().isBadRequest());
+        putJson("/api/users/me/spotify", token, "{\"spotifyAccessToken\":\"user-token-noname\"}")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.spotify.displayName").value("noname_sp"));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions putJson(String url, String bearer, String json) throws Exception {
+        return mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put(url)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON).content(json)
+                .header("Authorization", "Bearer " + bearer));
     }
 
     @Test
