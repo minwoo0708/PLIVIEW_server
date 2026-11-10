@@ -41,6 +41,10 @@ out/
 *.env.local
 http/http-client.private.env.json
 
+### Postman 앱 로컬 워크스페이스 (개인 설정, 토큰이 저장될 수 있음) ###
+.postman/
+postman/globals/
+
 ### OS ###
 .DS_Store
 Thumbs.db
