@@ -21,6 +21,7 @@ public enum ErrorCode {
 
     // 403
     FORBIDDEN(HttpStatus.FORBIDDEN, "권한이 없습니다."),
+    SPOTIFY_FORBIDDEN(HttpStatus.FORBIDDEN, "Spotify가 이 정보에 대한 접근을 허용하지 않습니다."),
     REVIEW_FORBIDDEN(HttpStatus.FORBIDDEN, "본인이 작성한 리뷰만 수정하거나 삭제할 수 있습니다."),
 
     // 404
@@ -39,6 +40,7 @@ public enum ErrorCode {
     SPOTIFY_ALREADY_LINKED(HttpStatus.CONFLICT, "이미 다른 PLIVIEW 계정에 연동된 Spotify 계정입니다."),
 
     // 429
+    TOO_MANY_REQUESTS(HttpStatus.TOO_MANY_REQUESTS, "요청이 너무 많아요. 잠시 후 다시 시도해 주세요."),
     SPOTIFY_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "Spotify 요청이 많습니다. 잠시 후 다시 시도해 주세요."),
 
     // 5xx
