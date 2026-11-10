@@ -391,6 +391,100 @@
       ]
     },
     {
+      "name": "6. v0.4 앱 요청 기능",
+      "item": [
+        {
+          "name": "앨범 리뷰 + 하이라이트",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('201 Created', () => pm.response.to.have.status(201));",
+            "if (pm.response.code === 201) {",
+            "    pm.environment.set('albumReviewId', pm.response.json().id);",
+            "    pm.test('highlights 저장', () => pm.expect(pm.response.json().highlights.bestTrack.name).to.eql('Don\\'t Stop the Party'));",
+            "}"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "{\n  \"type\": \"ALBUM\",\n  \"spotifyId\": \"4aawyAB9vmqN3uQ7FjRGTy\",\n  \"item\": { \"name\": \"Global Warming\", \"subtitle\": \"Pitbull\" },\n  \"rating\": 4.0,\n  \"bestTrack\": { \"spotifyId\": \"0Hf4aIJpsN4Os2f0y0VqWl\", \"name\": \"Don't Stop the Party\" },\n  \"worstTrack\": { \"spotifyId\": \"4Ce37cRWvM1vIGGynKcs22\", \"name\": \"Outro\" },\n  \"underratedTrack\": { \"spotifyId\": \"2bJvI42r8EF3wxjOuDav4r\", \"name\": \"Hope We Meet Again\" },\n  \"bestMoment\": \"1:05 드롭\",\n  \"body\": \"파티 앨범으로는 최고.\\n후반부는 조금 늘어진다.\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/reviews",
+            "description": "최고의 곡·워스트 곡·과소평가된 곡(앨범만)·최고의 순간·전체 평가. 모두 선택"
+          }
+        },
+        {
+          "name": "[실패] 플리에 과소평가된 곡 → 400",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('400 INVALID_REVIEW_FIELDS', () => {",
+            "    pm.response.to.have.status(400);",
+            "    pm.expect(pm.response.json().code).to.eql('INVALID_REVIEW_FIELDS');",
+            "});"
+          ] } }],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": { "mode": "raw", "raw": "{\n  \"type\": \"PLAYLIST\",\n  \"spotifyId\": \"plTest001\",\n  \"item\": { \"name\": \"테스트 플리\" },\n  \"rating\": 4.0,\n  \"conceptScore\": 4, \"flowScore\": 4, \"discoveryScore\": 4,\n  \"ownerSpotifyId\": \"owner1\",\n  \"underratedTrack\": { \"spotifyId\": \"t1\", \"name\": \"곡\" }\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/reviews"
+          }
+        },
+        {
+          "name": "곡별 평점 일괄 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('요청한 개수만큼', () => pm.expect(pm.response.json().length).to.eql(2));"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/items/tracks/ratings?spotifyIds=4uLU6hMCjMI75M1A2tKUQC,11dFghVXANMlKmJXsNCbNl", "description": "앨범·플리 수록곡 목록용. 최대 100개" }
+        },
+        {
+          "name": "이번 주의 플리",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/feed/weekly-playlists?minReviews=1&limit=10", "description": "기본 minReviews=50. 테스트할 때는 1로" }
+        },
+        {
+          "name": "Spotify 연동",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": { "mode": "raw", "raw": "{\n  \"spotifyAccessToken\": \"{{spotifyUserToken}}\"\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/users/me/spotify",
+            "description": "앱에서 PKCE로 받은 사용자 Spotify 토큰이 필요합니다. 환경 변수 spotifyUserToken에 넣으세요."
+          }
+        },
+        {
+          "name": "Spotify 연동 해제",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('spotify null', () => pm.expect(pm.response.json().spotify).to.be.null);"
+          ] } }],
+          "request": { "method": "DELETE", "header": [], "url": "{{baseUrl}}/api/users/me/spotify" }
+        },
+        {
+          "name": "큐레이터 프로필",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK (연동 안 했으면 404 CURATOR_NOT_FOUND)', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/curators/{{myId}}" }
+        },
+        {
+          "name": "큐레이터의 플리 (인기순)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK (연동 안 했으면 404)', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/curators/{{myId}}/playlists?page=0&size=20" }
+        },
+        {
+          "name": "별 5점 준 곡만 (프로필)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/users/{{myId}}/reviews?type=TRACK&minRating=5.0", "description": "ALBUM, PLAYLIST도 같은 방식" }
+        }
+      ]
+    },
+    {
       "name": "9. 탈퇴 (주의: 계정 삭제)",
       "item": [
         {
