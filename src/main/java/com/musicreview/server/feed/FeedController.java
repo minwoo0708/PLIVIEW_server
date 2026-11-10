@@ -1,6 +1,7 @@
 package com.musicreview.server.feed;
 
 import com.musicreview.server.feed.dto.PopularItemResponse;
+import com.musicreview.server.feed.dto.WeeklyPlaylistResponse;
 import com.musicreview.server.global.common.PageResponse;
 import com.musicreview.server.global.security.CurrentUserId;
 import com.musicreview.server.review.dto.ReviewResponse;
@@ -40,5 +41,17 @@ public class FeedController {
             @RequestParam(defaultValue = "10") @Min(value = 1, message = "limit은 1~50입니다.")
             @Max(value = 50, message = "limit은 1~50입니다.") int limit) {
         return feedService.getPopular(type, days, limit);
+    }
+
+    /** 홈 "이번 주의 플리": 리뷰가 많이(기본 50개 이상) 쌓인 플리 중 평점 높은 순 */
+    @GetMapping("/weekly-playlists")
+    public List<WeeklyPlaylistResponse> weeklyPlaylists(
+            @RequestParam(defaultValue = "50") @Min(value = 1, message = "minReviews는 1~1000입니다.")
+            @Max(value = 1000, message = "minReviews는 1~1000입니다.") int minReviews,
+            @RequestParam(required = false) @Min(value = 1, message = "days는 1~365입니다.")
+            @Max(value = 365, message = "days는 1~365입니다.") Integer days,
+            @RequestParam(defaultValue = "10") @Min(value = 1, message = "limit은 1~50입니다.")
+            @Max(value = 50, message = "limit은 1~50입니다.") int limit) {
+        return feedService.getWeeklyPlaylists(minReviews, days, limit);
     }
 }
