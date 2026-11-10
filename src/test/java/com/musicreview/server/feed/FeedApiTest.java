@@ -78,4 +78,40 @@ class FeedApiTest extends ApiTestSupport {
 
         getJson("/api/feed/popular?days=91", a).andExpect(status().isBadRequest());
     }
+
+    @Test
+    @DisplayName("이번 주의 플리: 리뷰 수가 기준 이상인 플리만, 평균 총점 순, 순위 1부터")
+    void weeklyPlaylists() throws Exception {
+        String[] users = new String[4];
+        for (int i = 0; i < users.length; i++) {
+            users[i] = signupAndGetToken("평가자" + i);
+        }
+        // great: 리뷰 3개 평균 5.0 / good: 리뷰 4개 평균 4.0 / small: 리뷰 1개 평균 5.0 (기준 미달) / 곡은 무관
+        for (int i = 0; i < 3; i++) {
+            postJson("/api/reviews", users[i], review("PLAYLIST", "great", "최고 플리", 5.0)).andExpect(status().isCreated());
+        }
+        for (int i = 0; i < 4; i++) {
+            postJson("/api/reviews", users[i], review("PLAYLIST", "good", "좋은 플리", 4.0)).andExpect(status().isCreated());
+        }
+        postJson("/api/reviews", users[0], review("PLAYLIST", "small", "작은 플리", 5.0)).andExpect(status().isCreated());
+        for (int i = 0; i < 4; i++) {
+            postJson("/api/reviews", users[i], review("TRACK", "song", "곡", 5.0)).andExpect(status().isCreated());
+        }
+
+        getJson("/api/feed/weekly-playlists?minReviews=3", users[0])
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(2)))
+                .andExpect(jsonPath("$[0].rank").value(1))
+                .andExpect(jsonPath("$[0].spotifyId").value("great"))
+                .andExpect(jsonPath("$[0].averageRating").value(5.0))
+                .andExpect(jsonPath("$[0].item.name").value("최고 플리"))
+                .andExpect(jsonPath("$[1].rank").value(2))
+                .andExpect(jsonPath("$[1].spotifyId").value("good"))
+                .andExpect(jsonPath("$[1].reviewCount").value(4));
+
+        // 기본값은 리뷰 50개 이상 → 지금은 없음
+        getJson("/api/feed/weekly-playlists", users[0]).andExpect(jsonPath("$", hasSize(0)));
+        getJson("/api/feed/weekly-playlists?minReviews=3&days=7", users[0]).andExpect(jsonPath("$", hasSize(2)));
+        getJson("/api/feed/weekly-playlists?days=0", users[0]).andExpect(status().isBadRequest());
+    }
 }
