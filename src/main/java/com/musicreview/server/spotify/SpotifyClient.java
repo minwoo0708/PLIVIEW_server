@@ -1,5 +1,6 @@
 package com.musicreview.server.spotify;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.musicreview.server.global.exception.BusinessException;
 import com.musicreview.server.global.exception.ErrorCode;
 import lombok.extern.slf4j.Slf4j;
@@ -57,6 +58,43 @@ public class SpotifyClient {
                 } catch (RestClientResponseException retry) {
                     throw translate(retry);
                 }
+            }
+            throw translate(e);
+        } catch (ResourceAccessException e) {
+            log.warn("Spotify 연결 실패: {}", e.getMessage());
+            throw new BusinessException(ErrorCode.SPOTIFY_UNAVAILABLE);
+        }
+    }
+
+    /** 사용자 Spotify 계정 정보 (연동 확인용) */
+    public record SpotifyUserProfile(String id, @JsonProperty("display_name") String displayName) {
+    }
+
+    /**
+     * 사용자가 앱에서 PKCE로 받은 Spotify 토큰으로 GET /v1/me 를 호출해 계정을 확인합니다.
+     * 서버는 이 토큰을 저장하지 않습니다.
+     */
+    public SpotifyUserProfile getCurrentUser(String userAccessToken) {
+        URI uri = UriComponentsBuilder.fromUriString(properties.apiBaseUrl()).path("/me").build().toUri();
+        try {
+            SpotifyUserProfile profile = restClient.get()
+                    .uri(uri)
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + userAccessToken)
+                    .retrieve()
+                    .body(SpotifyUserProfile.class);
+            if (profile == null || profile.id() == null) {
+                throw new BusinessException(ErrorCode.SPOTIFY_UNAVAILABLE);
+            }
+            return profile;
+        } catch (RestClientResponseException e) {
+            int status = e.getStatusCode().value();
+            if (status == 401) {
+                throw new BusinessException(ErrorCode.SPOTIFY_TOKEN_INVALID);
+            }
+            if (status == 403) {
+                // 개발 모드에서 Dashboard > User Management에 등록되지 않은 계정
+                throw new BusinessException(ErrorCode.SPOTIFY_TOKEN_INVALID,
+                        "이 Spotify 계정은 아직 연동할 수 없습니다. 개발자 대시보드의 사용자 목록에 등록돼 있어야 합니다.");
             }
             throw translate(e);
         } catch (ResourceAccessException e) {
