@@ -12,6 +12,12 @@
 > - 베스트 큐레이터: Spotify 연동한 사용자만, 응답에 `userId`·`nickname` 추가 → `GET /api/curators/{userId}`, `GET /api/curators/{userId}/playlists`(인기순)
 > - 이번 주의 플리: `GET /api/feed/weekly-playlists` (기본 리뷰 50개 이상, 평균 높은 순)
 > - 별 5점 모아 보기: `GET /api/users/{id}/reviews?type=TRACK|ALBUM|PLAYLIST&minRating=5.0`
+>
+> **서버 v0.5 (안정화)** — 앱에 영향 있는 변경:
+> - **플리 수록곡**: `GET /api/spotify/playlists/{id}`에는 이제 곡 목록이 없습니다(Spotify 정책). 수록곡은 **`GET /api/spotify/playlists/{id}/tracks?limit=50&offset=0`**을 따로 호출하세요. 항목의 곡 객체 키가 `item` 또는 `track`일 수 있으니 `entry.item ?? entry.track`로 읽고 null은 건너뛰세요.
+> - **리뷰 수정 `clear`**: PATCH 본문에 `"clear": ["bestTrack", "body"]`처럼 지울 항목 이름을 보냅니다(가능: comment, bestTrack, worstTrack, underratedTrack, bestMoment, body). 같은 항목을 값과 clear에 동시에 보내면 400.
+> - **리뷰 작성 시 서버가 Spotify에서 이름·주인을 확인**해 저장합니다(앱이 보낸 값보다 우선). 없는 id는 404 `SPOTIFY_NOT_FOUND`.
+> - **`/api/spotify/**` 제한**: 사용자당 1분 60회(넘으면 429 `TOO_MANY_REQUESTS`), 같은 요청은 서버가 2분 캐시. 검색은 디바운스를 유지하세요.
 
 ## 0. 한눈에 보기
 
@@ -214,7 +220,8 @@ Figma 변수(Variables)는 정의돼 있지 않아서, 화면에서 직접 뽑�
 - "Spotify에서 듣기": `external_urls.spotify`를 `url_launcher`로 엽니다(미리듣기 없음)
 
 ### 07 플리 상세
-- 정보 + 수록곡: `GET /api/spotify/playlists/{id}` (Spotify가 플리 응답 구조를 바꿔 온 적이 있으니 **수록곡 필드 경로는 실제 응답을 한 번 찍어 보고 확정**하세요. 곡 객체가 null인 항목은 거르기)
+- 정보: `GET /api/spotify/playlists/{id}` (이름·주인·커버·`snapshot_id`. **수록곡은 없음**)
+- 수록곡: `GET /api/spotify/playlists/{id}/tracks?limit=50&offset=0` (v0.5). `items[]`의 곡 객체는 `item` 또는 `track` 키 → `entry.item ?? entry.track`, null 항목은 거르기. `next`가 null이 아니면 다음 페이지
 - 요약: `GET /api/items/playlist/{id}/summary` → `playlistAverages`(컨셉/흐름/발견성 평균) 카드 4개
 - **"수정됨" 배지**: 각 리뷰의 `playlistScores.snapshotId` ≠ Spotify 응답의 현재 `snapshot_id`이면 표시
 - 하단 "이 플리 평가하기" 버튼 (내 리뷰가 있으면 "내 평가 수정")
