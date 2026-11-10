@@ -22,8 +22,16 @@ app:
     secret: ${JWT_SECRET}
     issuer: music-review-server
     expiration: 7d
+  cors:
+    # Flutter 웹 개발 서버는 포트가 매번 바뀌므로 localhost 전체 포트 허용. 배포 주소는 쉼표로 추가
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGINS:http://localhost:*,http://127.0.0.1:*}
   spotify:
+    # Spotify Developer Dashboard에서 발급. 없으면 /api/spotify/** 는 503 SPOTIFY_NOT_CONFIGURED
+    client-id: ${SPOTIFY_CLIENT_ID:}
+    client-secret: ${SPOTIFY_CLIENT_SECRET:}
     api-base-url: https://api.spotify.com/v1
+    token-url: https://accounts.spotify.com/api/token
+    market: KR
     connect-timeout: 3s
     read-timeout: 5s
   page:

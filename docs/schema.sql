@@ -1,6 +1,9 @@
--- 음악·플리 리뷰 앱 MySQL 8.4 스키마 (docs/API.md 기준)
+-- PLIVIEW MySQL 8.4 스키마 v2 (docs/API.md 기준, 이메일 로그인)
 -- 실행 (PowerShell): mysql -u root -p -e "source docs/schema.sql"
 -- 실행 (cmd/bash):   mysql -u root -p < docs/schema.sql
+--
+-- v1(Spotify 로그인)으로 이미 만든 DB가 있다면, 데이터가 없을 때 아래 한 줄로 지우고 다시 실행:
+--   DROP DATABASE music_review;
 
 CREATE DATABASE IF NOT EXISTS music_review
   DEFAULT CHARACTER SET utf8mb4
@@ -10,13 +13,14 @@ USE music_review;
 
 CREATE TABLE IF NOT EXISTS users (
     id                BIGINT       NOT NULL AUTO_INCREMENT,
-    spotify_user_id   VARCHAR(64)  NOT NULL,
+    email             VARCHAR(100) NOT NULL,              -- 소문자로 저장
+    password_hash     VARCHAR(100) NOT NULL,              -- BCrypt
     nickname          VARCHAR(20)  NOT NULL,
     profile_image_url VARCHAR(500) NULL,
     created_at        DATETIME(6)  NOT NULL,
     updated_at        DATETIME(6)  NOT NULL,
     PRIMARY KEY (id),
-    CONSTRAINT uk_users_spotify_user_id UNIQUE (spotify_user_id)
+    CONSTRAINT uk_users_email UNIQUE (email)
 ) ENGINE = InnoDB;
 
 CREATE TABLE IF NOT EXISTS reviews (
