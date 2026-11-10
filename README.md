@@ -10,12 +10,12 @@ Spotify의 곡·앨범·플레이리스트에 별점과 리뷰를 남기는 앱 
 | DB | MySQL 8.4 (기본 실행·테스트는 H2 메모리 DB) |
 | 빌드 | Gradle (wrapper 포함) |
 | 인증 | 이메일 + 비밀번호(BCrypt) → 서버 JWT(HS256, 7일) |
-| 테스트 | MockMvc 통합 테스트 60개 (`./gradlew test`) |
+| 테스트 | MockMvc 통합 테스트 67개 (`./gradlew test`) |
 
 ## 문서
 
 - [API 명세서](docs/API.md)
-- [DB 스키마 (MySQL DDL)](docs/schema.sql)
+- [DB 스키마 (최종 모양, 참고용)](docs/schema.sql) · 실제 적용은 [Flyway 마이그레이션](src/main/resources/db/migration)
 - [HTTP 요청 모음 (IntelliJ HTTP Client)](http/api.http)
 - [Postman 컬렉션](postman/) — 아래 「Postman으로 테스트」 참고
 
@@ -67,15 +67,16 @@ com.musicreview.server
 
 ### 2) mysql 프로필 (로컬 MySQL)
 
-처음 한 번 DB를 만듭니다. (예전 v1 스키마로 만든 DB가 있으면 `docs/schema.sql` 맨 위 안내대로 지우고 다시 만드세요.)
-v2 DB에 v0.4 컬럼을 추가할 때는 서버를 켜면 자동으로 추가되고, 안 되면 `docs/migrations/V3__review_highlights_and_spotify_link.sql`을 실행합니다.
+**테이블은 서버가 만듭니다.** mysql 프로필로 켜면 [Flyway](https://flywaydb.org)가 `src/main/resources/db/migration`의 `V1`, `V2`, `V3` ...을 순서대로 적용하고, Hibernate는 엔티티와 테이블이 맞는지 **검사만**(`ddl-auto: validate`) 합니다. 그래서 빈 DB만 한 번 만들면 돼요.
 
 ```powershell
-# PowerShell (프로젝트 폴더에서 실행)
-mysql -u root -p -e "source docs/schema.sql"
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS music_review DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE utf8mb4_unicode_ci"
 ```
 
-> cmd나 Git Bash에서는 `mysql -u root -p < docs/schema.sql`도 됩니다. PowerShell은 `<`를 지원하지 않습니다.
+- **스키마를 바꿀 때**는 엔티티를 고치고 새 마이그레이션 파일(`V4__설명.sql`)을 추가합니다. 이미 적용된 `V1~V3` 파일은 **절대 수정하지 마세요**(Flyway가 체크섬 불일치로 서버 시작을 막습니다).
+- **Flyway 도입 전에 만든 DB**(테이블은 있고 이력 표가 없음)는 처음 켤 때 "V2까지 적용된 상태"로 보고 시작해서 V3만 적용합니다. v0.4 컬럼이 없는 더 오래된 DB라면 `FLYWAY_BASELINE_VERSION=1`로 켜세요.
+- `docs/schema.sql`은 최종 스키마를 보여 주는 **참고용**이라 직접 실행하지 않아도 됩니다. 그 파일로 만든 DB에 Flyway를 붙이려면 `FLYWAY_BASELINE_VERSION=3`.
+- 예전 v1(Spotify 로그인) 스키마 DB는 데이터가 없을 때 `DROP DATABASE music_review;` 후 위 명령으로 다시 만드세요.
 
 환경변수를 넣고 실행합니다. (PowerShell 기준)
 
@@ -97,6 +98,8 @@ IntelliJ에서는 **Run → Edit Configurations → Environment variables**에 �
 | `JWT_SECRET` | local만 개발용 기본값 | 32바이트 이상, mysql 프로필에서는 **필수** |
 | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | (없음) | Spotify Dashboard에서 발급. 없으면 `/api/spotify/**`만 503 |
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:*,http://127.0.0.1:*` | Flutter 웹 배포 주소를 쉼표로 추가 |
+| `SPOTIFY_RATE_LIMIT_PER_MINUTE` | `60` | 사용자 한 명이 1분에 보낼 수 있는 `/api/spotify/**` 요청 수 |
+| `FLYWAY_BASELINE_VERSION` | `2` | Flyway 도입 전에 만든 DB를 몇 번 마이그레이션까지 적용된 것으로 볼지 (빈 DB는 영향 없음) |
 
 > 비밀번호나 키는 절대 커밋하지 마세요. `.env`, `http/http-client.private.env.json`, Postman 로컬 워크스페이스 파일은 `.gitignore`에 등록돼 있습니다.
 
@@ -135,6 +138,7 @@ IntelliJ에서는 **Run → Edit Configurations → Environment variables**에 �
 | 8 | 권장: 피드, 인기 항목, 유저 리뷰·통계 | ✅ |
 | 9 | 추가: 큐레이터 랭킹 | ✅ |
 | 9-1 | 앱 요청(v0.4): 리뷰 하이라이트, 곡별 평점 일괄 조회, Spotify 연동, 베스트 큐레이터 개편·프로필, 이번 주의 플리 | ✅ |
+| 9-2 | 안정화(v0.5): 플리 수록곡 API, 리뷰 `clear`, Spotify 확인 저장, 응답 캐시·요청 제한, Flyway | ✅ |
 | 10 | 배포, CI(GitHub Actions) | ⬜ |
 
 ## 참고
