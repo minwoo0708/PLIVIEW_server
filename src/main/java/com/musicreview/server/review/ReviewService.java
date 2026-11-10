@@ -7,6 +7,8 @@ import com.musicreview.server.review.domain.ItemType;
 import com.musicreview.server.review.domain.Review;
 import com.musicreview.server.review.domain.ReviewRepository;
 import com.musicreview.server.review.dto.CreateReviewRequest;
+import com.musicreview.server.review.dto.ItemInfoRequest;
+import com.musicreview.server.spotify.SpotifyItemLookup;
 import com.musicreview.server.review.dto.ReviewResponse;
 import com.musicreview.server.review.dto.TrackRefRequest;
 import com.musicreview.server.review.dto.UpdateReviewRequest;
@@ -22,6 +24,7 @@ import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 @Service
@@ -32,6 +35,7 @@ public class ReviewService {
 
     private final ReviewRepository reviewRepository;
     private final UserService userService;
+    private final SpotifyItemLookup itemLookup;
 
     @Transactional
     public ReviewResponse create(Long userId, CreateReviewRequest request) {
@@ -41,15 +45,22 @@ public class ReviewService {
             throw new BusinessException(ErrorCode.REVIEW_ALREADY_EXISTS);
         }
 
+        // Spotify에서 진짜 정보를 확인할 수 있으면 그 값을 쓰고, 안 되면 앱이 보낸 값을 씀
+        Optional<SpotifyItemLookup.SpotifyItem> verified = itemLookup.lookup(request.type(), request.spotifyId());
+
         Review review = Review.create(user, request.type(), request.spotifyId());
-        review.changeItem(request.item().name().strip(), request.item().subtitle(), request.item().imageUrl());
+        applyItem(review, request.item(), verified);
         review.changeRating(scale(request.rating()));
         review.changeComment(request.comment());
         review.replaceTags(normalizeTags(request.tags()));
         if (review.isPlaylist()) {
             review.changePlaylistScores(scale(request.conceptScore()), scale(request.flowScore()), scale(request.discoveryScore()));
-            review.changeSnapshotId(request.snapshotId());
-            review.assignOwner(request.ownerSpotifyId().strip());
+            review.changeSnapshotId(request.snapshotId() != null
+                    ? request.snapshotId()
+                    : verified.map(SpotifyItemLookup.SpotifyItem::snapshotId).orElse(null));
+            // 큐레이터 랭킹 조작을 막기 위해 플리 주인 id는 Spotify 값을 우선
+            review.assignOwner(verified.map(SpotifyItemLookup.SpotifyItem::ownerId)
+                    .orElse(request.ownerSpotifyId().strip()));
         }
         applyHighlights(review, request.bestTrack(), request.worstTrack(), request.underratedTrack(),
                 request.bestMoment(), request.body());
@@ -75,10 +86,12 @@ public class ReviewService {
             throw new BusinessException(ErrorCode.INVALID_REVIEW_FIELDS,
                     "곡·앨범 리뷰에는 conceptScore, flowScore, discoveryScore, snapshotId를 보낼 수 없습니다.");
         }
-        validateHighlights(review.getType(), request.hasHighlights(), request.underratedTrack() != null);
+        validateHighlights(review.getType(), request.hasHighlights(),
+                request.underratedTrack() != null || request.clearOrEmpty().contains("underratedTrack"));
+        validateClear(request);
 
         if (request.item() != null) {
-            review.changeItem(request.item().name().strip(), request.item().subtitle(), request.item().imageUrl());
+            applyItem(review, request.item(), itemLookup.lookup(review.getType(), review.getSpotifyId()));
         }
         if (request.rating() != null) {
             review.changeRating(scale(request.rating()));
@@ -97,6 +110,7 @@ public class ReviewService {
         }
         applyHighlights(review, request.bestTrack(), request.worstTrack(), request.underratedTrack(),
                 request.bestMoment(), request.body());
+        applyClear(review, request.clearOrEmpty());
         reviewRepository.flush(); // updatedAt 반영
         return ReviewResponse.of(review, userId);
     }
@@ -137,6 +151,48 @@ public class ReviewService {
             throw new BusinessException(ErrorCode.REVIEW_FORBIDDEN);
         }
         return review;
+    }
+
+    /** 표시용 정보: Spotify에서 확인한 값 우선, 비어 있는 칸만 앱이 보낸 값으로 */
+    private static void applyItem(Review review, ItemInfoRequest requested,
+                                  Optional<SpotifyItemLookup.SpotifyItem> verified) {
+        String name = verified.map(SpotifyItemLookup.SpotifyItem::name).orElse(requested.name().strip());
+        String subtitle = verified.map(SpotifyItemLookup.SpotifyItem::subtitle).orElse(requested.subtitle());
+        String imageUrl = verified.map(SpotifyItemLookup.SpotifyItem::imageUrl).orElse(requested.imageUrl());
+        review.changeItem(truncate(name, 200), truncate(subtitle, 200), truncate(imageUrl, 500));
+    }
+
+    /** clear: 허용된 이름만, 값과 동시에 보내면 400 */
+    private static void validateClear(UpdateReviewRequest request) {
+        for (String name : request.clearOrEmpty()) {
+            if (!UpdateReviewRequest.CLEARABLE.contains(name)) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        "clear에 넣을 수 없는 항목입니다: " + name + " (가능: " + String.join(", ",
+                                UpdateReviewRequest.CLEARABLE.stream().sorted().toList()) + ")");
+            }
+            if (request.isSetAndCleared(name)) {
+                throw new BusinessException(ErrorCode.INVALID_INPUT,
+                        name + "을(를) 값으로 보내면서 clear에도 넣을 수 없습니다.");
+            }
+        }
+    }
+
+    private static void applyClear(Review review, Set<String> clear) {
+        for (String name : clear) {
+            switch (name) {
+                case "comment" -> review.changeComment(null);
+                case "bestTrack" -> review.changeBestTrack(null, null);
+                case "worstTrack" -> review.changeWorstTrack(null, null);
+                case "underratedTrack" -> review.changeUnderratedTrack(null, null);
+                case "bestMoment" -> review.changeBestMoment(null);
+                case "body" -> review.changeBody(null);
+                default -> throw new IllegalStateException(name);
+            }
+        }
+    }
+
+    private static String truncate(String value, int max) {
+        return value == null || value.length() <= max ? value : value.substring(0, max);
     }
 
     /** 하이라이트는 앨범·플리만, 과소평가된 곡은 앨범만 */
