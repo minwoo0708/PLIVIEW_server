@@ -1,0 +1,577 @@
+{
+  "info": {
+    "name": "music-review-server",
+    "description": "음악·플리 리뷰 앱 백엔드 API (docs/API.md 기준).\n\n사용 순서\n1. 오른쪽 위 환경을 'music-review local'로 선택\n2. 환경 변수 spotifyToken에 Spotify Access Token 입력\n3. '1. 인증·회원 > 로그인' 실행 → jwt, myId 자동 저장\n4. 나머지 요청 실행 (컬렉션 공통 Bearer {{jwt}} 인증 사용)\n\n아직 구현 전인 API는 404 또는 401이 나오는 것이 정상입니다.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{jwt}}", "type": "string" }
+    ]
+  },
+  "event": [
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// 모든 요청 공통: 에러 응답이면 docs/API.md 1.6 형식인지 확인",
+          "if (pm.response.code >= 400 && pm.response.headers.get('Content-Type') && pm.response.headers.get('Content-Type').includes('json')) {",
+          "    pm.test('에러 응답 형식 (status, code, message)', function () {",
+          "        const body = pm.response.json();",
+          "        pm.expect(body).to.have.property('status');",
+          "        pm.expect(body).to.have.property('code');",
+          "        pm.expect(body).to.have.property('message');",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "0. 기본",
+      "item": [
+        {
+          "name": "서버 동작 확인",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('message = hello', () => pm.expect(pm.response.json().message).to.eql('hello'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/hello",
+            "description": "인증 없음. 서버가 켜져 있는지 확인합니다."
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. 인증·회원",
+      "item": [
+        {
+          "name": "로그인 (Spotify 토큰 → JWT)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.environment.set('jwt', body.accessToken);",
+                  "    pm.environment.set('myId', body.user.id);",
+                  "    pm.test('tokenType = Bearer', () => pm.expect(body.tokenType).to.eql('Bearer'));",
+                  "    console.log('jwt, myId 저장 완료. isNewUser =', body.isNewUser);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"spotifyAccessToken\": \"{{spotifyToken}}\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/auth/spotify",
+            "description": "F01. 앱이 PKCE로 받은 Spotify Access Token을 보내면 서버 JWT를 발급합니다. 성공하면 환경 변수 jwt, myId가 자동 저장됩니다."
+          }
+        },
+        {
+          "name": "내 정보",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/users/me"
+          }
+        },
+        {
+          "name": "닉네임 수정",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"nickname\": \"음악덕후\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/users/me",
+            "description": "2~20자, 중복 허용"
+          }
+        },
+        {
+          "name": "[실패] 토큰 없이 내 정보 → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('401 UNAUTHORIZED', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": { "type": "noauth" },
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/users/me"
+          }
+        }
+      ]
+    },
+    {
+      "name": "2. 리뷰",
+      "item": [
+        {
+          "name": "리뷰 작성 (곡)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set('reviewId', pm.response.json().id);",
+                  "    pm.test('Location 헤더', () => pm.response.to.have.header('Location'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"TRACK\",\n  \"spotifyId\": \"4uLU6hMCjMI75M1A2tKUQC\",\n  \"item\": {\n    \"name\": \"Never Gonna Give You Up\",\n    \"subtitle\": \"Rick Astley\",\n    \"imageUrl\": \"https://i.scdn.co/image/ab67616d0000b27315ebbedaacef61af244262a8\"\n  },\n  \"rating\": 4.5,\n  \"comment\": \"몇 번을 들어도 좋다\",\n  \"tags\": [\"신나는\", \"80년대\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/reviews",
+            "description": "F06. 성공하면 reviewId가 자동 저장됩니다."
+          }
+        },
+        {
+          "name": "리뷰 작성 (플레이리스트)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "if (pm.response.code === 201) {",
+                  "    pm.environment.set('playlistReviewId', pm.response.json().id);",
+                  "    pm.test('playlistScores 있음', () => pm.expect(pm.response.json().playlistScores).to.not.be.null);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"PLAYLIST\",\n  \"spotifyId\": \"3cEYpjA9oz9GiPac4AsH4n\",\n  \"item\": {\n    \"name\": \"새벽 드라이브\",\n    \"subtitle\": \"smedjan\",\n    \"imageUrl\": \"https://i.scdn.co/image/ab67706c0000da84\"\n  },\n  \"rating\": 4.5,\n  \"conceptScore\": 5.0,\n  \"flowScore\": 4.5,\n  \"discoveryScore\": 3.5,\n  \"snapshotId\": \"MTY4NjY2OTQ0MCwwMDAwMDAwMA==\",\n  \"ownerSpotifyId\": \"smedjan\",\n  \"comment\": \"곡 순서가 자연스럽다\",\n  \"tags\": [\"드라이브\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/reviews",
+            "description": "F07. 컨셉 일치도, 흐름, 발견성, 총점(rating) + snapshot_id"
+          }
+        },
+        {
+          "name": "[실패] 같은 곡 중복 작성 → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 REVIEW_ALREADY_EXISTS', () => {",
+                  "    pm.response.to.have.status(409);",
+                  "    pm.expect(pm.response.json().code).to.eql('REVIEW_ALREADY_EXISTS');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"TRACK\",\n  \"spotifyId\": \"4uLU6hMCjMI75M1A2tKUQC\",\n  \"item\": { \"name\": \"Never Gonna Give You Up\" },\n  \"rating\": 3.0\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/reviews",
+            "description": "'리뷰 작성 (곡)'을 먼저 실행한 뒤 실행"
+          }
+        },
+        {
+          "name": "[실패] 곡 리뷰에 플리 필드 → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 INVALID_REVIEW_FIELDS', () => {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().code).to.eql('INVALID_REVIEW_FIELDS');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"TRACK\",\n  \"spotifyId\": \"11dFghVXANMlKmJXsNCbNl\",\n  \"item\": { \"name\": \"Cut To The Feeling\" },\n  \"rating\": 4.0,\n  \"flowScore\": 3.0\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/reviews"
+          }
+        },
+        {
+          "name": "[실패] 별점 0.5 단위 아님 → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 INVALID_INPUT', () => {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().code).to.eql('INVALID_INPUT');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"ALBUM\",\n  \"spotifyId\": \"4aawyAB9vmqN3uQ7FjRGTy\",\n  \"item\": { \"name\": \"Global Warming\" },\n  \"rating\": 4.3\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/reviews"
+          }
+        },
+        {
+          "name": "리뷰 단건 조회",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/reviews/{{reviewId}}"
+          }
+        },
+        {
+          "name": "리뷰 수정",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('rating 5.0으로 변경', () => pm.expect(pm.response.json().rating).to.eql(5.0));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rating\": 5.0,\n  \"tags\": [\"명곡\"]\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{baseUrl}}/api/reviews/{{reviewId}}",
+            "description": "보낸 필드만 변경. tags는 전체 교체."
+          }
+        },
+        {
+          "name": "내 리뷰 일괄 조회",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('배열 응답', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/reviews/mine?type=TRACK&spotifyIds=4uLU6hMCjMI75M1A2tKUQC,11dFghVXANMlKmJXsNCbNl",
+            "description": "F10. 최근 재생곡 중 이미 평가한 곡 표시용"
+          }
+        },
+        {
+          "name": "리뷰 삭제",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('204 No Content', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/api/reviews/{{reviewId}}",
+            "description": "삭제 후 다시 실행하면 404 REVIEW_NOT_FOUND"
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. 항목 (곡·앨범·플리 상세)",
+      "item": [
+        {
+          "name": "항목의 리뷰 목록",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('페이지 형식', () => pm.expect(pm.response.json()).to.have.all.keys('content', 'page', 'size', 'totalElements', 'totalPages', 'hasNext'));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/items/track/4uLU6hMCjMI75M1A2tKUQC/reviews?page=0&size=20&sort=latest",
+            "description": "F04. sort: latest | rating_desc | rating_asc"
+          }
+        },
+        {
+          "name": "항목 요약 (평균 별점, 내 리뷰)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/items/playlist/3cEYpjA9oz9GiPac4AsH4n/summary",
+            "description": "F04, F07, F11. 플리면 playlistAverages 포함"
+          }
+        },
+        {
+          "name": "[실패] 잘못된 type → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 INVALID_ITEM_TYPE', () => {",
+                  "    pm.response.to.have.status(400);",
+                  "    pm.expect(pm.response.json().code).to.eql('INVALID_ITEM_TYPE');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/items/artist/0OdUWJ0sBjDrqHygGUXeCF/summary"
+          }
+        }
+      ]
+    },
+    {
+      "name": "4. 피드·프로필",
+      "item": [
+        {
+          "name": "최신 리뷰 피드",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/feed?page=0&size=20",
+            "description": "F08. type=TRACK|ALBUM|PLAYLIST 로 거르기 가능"
+          }
+        },
+        {
+          "name": "인기 항목",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/feed/popular?days=7&limit=10",
+            "description": "F08. 최근 N일 리뷰 수 기준"
+          }
+        },
+        {
+          "name": "유저의 리뷰 + 별점 분포 (내 프로필)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('user, stats, reviews 포함', () => pm.expect(pm.response.json()).to.include.keys('user', 'stats', 'reviews'));",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/users/{{myId}}/reviews?page=0&size=20",
+            "description": "F09. myId는 로그인 시 자동 저장"
+          }
+        },
+        {
+          "name": "4.5점 이상 곡 (리뷰 기반 플리 생성용)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/users/{{myId}}/reviews?type=TRACK&minRating=4.5&size=50",
+            "description": "F14"
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. 랭킹",
+      "item": [
+        {
+          "name": "큐레이터 랭킹",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/curators/ranking?minReviews=1&limit=20",
+            "description": "F12. 플리 주인별 평균 총점 순위"
+          }
+        }
+      ]
+    }
+  ]
+}
