@@ -16,6 +16,23 @@ Spotify의 곡·앨범·플레이리스트에 별점과 리뷰를 남기는 안�
 - [API 명세서](docs/API.md)
 - [DB 스키마 (MySQL DDL)](docs/schema.sql)
 - [HTTP 요청 모음 (IntelliJ HTTP Client)](http/api.http)
+- [Postman 컬렉션](postman/) — 아래 「Postman으로 테스트」 참고
+
+## Postman으로 테스트
+
+1. Postman → **Import** → `postman/` 폴더의 두 파일을 끌어다 놓기
+   - `music-review-server.postman_collection.json` (요청 22개, 자동 테스트 포함)
+   - `local.postman_environment.json` (환경: `music-review local`)
+2. 오른쪽 위 환경 선택에서 **music-review local** 선택
+3. 환경 변수 `spotifyToken`에 Spotify Access Token 입력
+4. 서버 실행 후 **0. 기본 → 서버 동작 확인**, **1. 인증·회원 → 로그인** 순서로 실행
+   - 로그인하면 `jwt`, `myId`가 자동 저장되고, 나머지 요청은 컬렉션 공통 `Bearer {{jwt}}` 인증을 씁니다.
+   - 리뷰 작성하면 `reviewId`가 저장돼 조회·수정·삭제에 이어서 쓰입니다.
+5. 폴더 전체를 실행하려면 컬렉션 `...` → **Run collection**
+
+`[실패]`로 시작하는 요청은 에러 응답(400/401/409)이 명세대로 나오는지 확인하는 용도입니다.
+
+> 토큰이 들어간 환경을 다시 Export해서 커밋하지 마세요. 저장소의 환경 파일은 값이 비어 있어야 합니다.
 
 ## 구조
 
