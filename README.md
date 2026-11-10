@@ -10,7 +10,7 @@ Spotify의 곡·앨범·플레이리스트에 별점과 리뷰를 남기는 앱 
 | DB | MySQL 8.4 (기본 실행·테스트는 H2 메모리 DB) |
 | 빌드 | Gradle (wrapper 포함) |
 | 인증 | 이메일 + 비밀번호(BCrypt) → 서버 JWT(HS256, 7일) |
-| 테스트 | MockMvc 통합 테스트 39개 (`./gradlew test`) |
+| 테스트 | MockMvc 통합 테스트 46개 (`./gradlew test`) |
 
 ## 문서
 
@@ -44,12 +44,12 @@ com.musicreview.server
 │  ├─ validation  @Nickname, @Password, @Score, @SpotifyId
 │  └─ common      BaseTimeEntity, PageResponse, /api/hello
 ├─ auth           회원가입, 로그인
-├─ user           내 정보, 비밀번호 변경, 탈퇴
-├─ review         리뷰 CRUD, 태그, 내 리뷰 일괄 조회
+├─ user           내 정보, 비밀번호 변경, 탈퇴, 유저 프로필(리뷰·통계)
+├─ review         리뷰 CRUD, 태그, 내 리뷰 일괄 조회, 집계 쿼리
 ├─ item           항목별 리뷰 목록, 요약(평균·분포·내 리뷰)
 ├─ spotify        Spotify 대리 조회 (검색, 곡·앨범·플리)
-├─ feed           최신 피드, 인기 항목 (예정)
-└─ curator        큐레이터 랭킹 (예정)
+├─ feed           최신 피드, 인기 항목
+└─ curator        큐레이터 랭킹
 ```
 
 ## 실행
@@ -131,8 +131,9 @@ IntelliJ에서는 **Run → Edit Configurations → Environment variables**에 �
 | 5 | 리뷰: 작성·조회·수정·삭제, 내 리뷰 일괄 조회 | ✅ |
 | 6 | 항목: 리뷰 목록(정렬·페이지), 요약(평균·분포·내 리뷰) | ✅ |
 | 7 | Spotify 대리 조회: 검색, 곡·앨범·아티스트 앨범·플리 | ✅ |
-| 8 | 권장: 피드, 인기 항목, 유저 리뷰·통계 | ⬜ |
-| 9 | 추가: 큐레이터 랭킹 | ⬜ |
+| 8 | 권장: 피드, 인기 항목, 유저 리뷰·통계 | ✅ |
+| 9 | 추가: 큐레이터 랭킹 | ✅ |
+| 10 | 배포, CI(GitHub Actions) | ⬜ |
 
 ## 참고
 
