@@ -19,6 +19,7 @@ public record ReviewResponse(
         String comment,
         List<String> tags,
         PlaylistScores playlistScores,
+        Highlights highlights,
         Author author,
         boolean isMine,
         OffsetDateTime createdAt,
@@ -37,6 +38,23 @@ public record ReviewResponse(
     ) {
     }
 
+    public record TrackRef(String spotifyId, String name) {
+
+        static TrackRef of(String spotifyId, String name) {
+            return spotifyId == null ? null : new TrackRef(spotifyId, name);
+        }
+    }
+
+    /** 앨범·플리 리뷰 하이라이트. 곡 리뷰면 highlights 자체가 null */
+    public record Highlights(
+            TrackRef bestTrack,
+            TrackRef worstTrack,
+            TrackRef underratedTrack,
+            String bestMoment,
+            String body
+    ) {
+    }
+
     /** 다른 사람에게 보이는 작성자 정보 (이메일 없음) */
     public record Author(Long id, String nickname, String profileImageUrl) {
 
@@ -51,6 +69,14 @@ public record ReviewResponse(
                 ? new PlaylistScores(review.getConceptScore(), review.getFlowScore(), review.getDiscoveryScore(),
                 review.getSnapshotId(), review.getOwnerSpotifyId())
                 : null;
+        Highlights highlights = review.isTrack()
+                ? null
+                : new Highlights(
+                TrackRef.of(review.getBestTrackId(), review.getBestTrackName()),
+                TrackRef.of(review.getWorstTrackId(), review.getWorstTrackName()),
+                TrackRef.of(review.getUnderratedTrackId(), review.getUnderratedTrackName()),
+                review.getBestMoment(),
+                review.getBody());
         return new ReviewResponse(
                 review.getId(),
                 review.getType(),
@@ -60,6 +86,7 @@ public record ReviewResponse(
                 review.getComment(),
                 review.getTags().stream().sorted().toList(),
                 playlistScores,
+                highlights,
                 Author.from(review.getUser()),
                 review.isWrittenBy(viewerId),
                 TimeUtils.toOffset(review.getCreatedAt()),

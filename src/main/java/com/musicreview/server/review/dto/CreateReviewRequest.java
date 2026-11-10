@@ -47,6 +47,29 @@ public record CreateReviewRequest(
         String snapshotId,
 
         @Size(max = 64, message = "ownerSpotifyId는 64자 이하여야 합니다.")
-        String ownerSpotifyId
+        String ownerSpotifyId,
+
+        // ===== 앨범·플리 하이라이트 (모두 선택, 곡 리뷰에 보내면 400) =====
+
+        @Valid
+        TrackRefRequest bestTrack,
+
+        @Valid
+        TrackRefRequest worstTrack,
+
+        /** 앨범만. 플리에 보내면 400 */
+        @Valid
+        TrackRefRequest underratedTrack,
+
+        @Size(max = 100, message = "최고의 순간은 100자 이하여야 합니다.")
+        String bestMoment,
+
+        @Size(max = 2000, message = "전체 평가는 2000자 이하여야 합니다.")
+        String body
 ) {
+
+    public boolean hasHighlights() {
+        return bestTrack != null || worstTrack != null || underratedTrack != null
+                || bestMoment != null || body != null;
+    }
 }
