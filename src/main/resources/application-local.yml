@@ -1,0 +1,23 @@
+# 개발 초기용: H2 메모리 DB (서버를 끄면 데이터가 사라짐)
+spring:
+  datasource:
+    url: jdbc:h2:mem:music_review;MODE=MySQL;DATABASE_TO_LOWER=TRUE;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  jpa:
+    hibernate:
+      ddl-auto: create
+    show-sql: true
+
+app:
+  jwt:
+    # local 전용 개발 키. 실제 키로 쓰지 말 것
+    secret: ${JWT_SECRET:local-dev-only-secret-change-me-0123456789abcdef}
+
+logging:
+  level:
+    com.musicreview.server: debug
