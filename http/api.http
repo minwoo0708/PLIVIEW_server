@@ -154,15 +154,15 @@ Authorization: Bearer {{jwt}}
 GET {{baseUrl}}/api/items/playlist/3cEYpjA9oz9GiPac4AsH4n/summary
 Authorization: Bearer {{jwt}}
 
-### 10. 최신 피드 (아직 미구현 → 404)
+### 10. 최신 피드
 GET {{baseUrl}}/api/feed?page=0&size=20
 Authorization: Bearer {{jwt}}
 
-### 11. 인기 항목 (아직 미구현)
+### 11. 인기 항목
 GET {{baseUrl}}/api/feed/popular?days=7&limit=10
 Authorization: Bearer {{jwt}}
 
-### 12. 유저의 리뷰 (아직 미구현)
+### 12. 유저의 리뷰 + 통계 (4.5점 이상 곡만)
 GET {{baseUrl}}/api/users/{{myId}}/reviews?type=TRACK&minRating=4.5
 Authorization: Bearer {{jwt}}
 
@@ -170,6 +170,6 @@ Authorization: Bearer {{jwt}}
 GET {{baseUrl}}/api/reviews/mine?type=TRACK&spotifyIds=4uLU6hMCjMI75M1A2tKUQC,11dFghVXANMlKmJXsNCbNl
 Authorization: Bearer {{jwt}}
 
-### 14. 큐레이터 랭킹 (아직 미구현)
+### 14. 큐레이터 랭킹
 GET {{baseUrl}}/api/curators/ranking?minReviews=1&limit=20
 Authorization: Bearer {{jwt}}

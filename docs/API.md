@@ -2,7 +2,7 @@
 
 > 서버: Spring Boot 4.1 / Java 21 / MySQL 8.4
 > 클라이언트: Flutter (안드로이드 앱 + 웹)
-> 버전: v0.2 (자체 회원가입·로그인 방식)
+> 버전: v0.3 (전체 기능 구현: 피드, 인기 항목, 유저 통계, 큐레이터 랭킹 추가)
 
 ---
 
@@ -459,17 +459,106 @@
 
 ---
 
-### 19. 최신 리뷰 피드 — `GET /api/feed` (권장, 미구현)
-`page`, `size`, `type`(선택) → `Page<ReviewResponse>` 최신순
+### 19. 최신 리뷰 피드 — `GET /api/feed`
+인증: ✅ · 홈 화면
 
-### 20. 인기 항목 — `GET /api/feed/popular` (권장, 미구현)
-`type`(선택), `days`(1~90, 기본 7), `limit`(1~50, 기본 10) → `[{ type, spotifyId, item, reviewCount, averageRating }]`, 리뷰 수 내림차순
+| 쿼리 | 기본값 | 설명 |
+|---|---|---|
+| page, size | 0, 20 | 1.5 참고 |
+| type | 전체 | `TRACK` / `ALBUM` / `PLAYLIST` (대소문자 무관) |
 
-### 21. 유저의 리뷰 — `GET /api/users/{userId}/reviews` (권장, 미구현)
-`page`, `size`, `type`, `minRating` → `{ user, stats: { reviewCount, averageRating, ratingDistribution, countByType }, reviews: Page }`. `stats`는 필터와 상관없이 전체 기준
+**200 OK**: `Page<ReviewResponse>` 최신순 (모든 사용자의 리뷰)
+**에러**: 400 `INVALID_ITEM_TYPE` / `INVALID_INPUT`
 
-### 22. 큐레이터 랭킹 — `GET /api/curators/ranking` (추가, 미구현)
-`minReviews`(기본 3), `limit`(기본 20) → `[{ rank, ownerSpotifyId, ownerName, playlistCount, reviewCount, averageRating, averageScores }]`, 평균 총점 내림차순, 동점은 같은 순위
+---
+
+### 20. 인기 항목 — `GET /api/feed/popular`
+인증: ✅ · 홈 화면 "요즘 리뷰 많은 곡·플리"
+
+| 쿼리 | 기본값 | 설명 |
+|---|---|---|
+| type | 전체 | 타입 거르기 |
+| days | 7 | 최근 N일 동안 작성된 리뷰만 셈 (1~90) |
+| limit | 10 | 1~50 |
+
+**200 OK**
+```json
+[
+  {
+    "type": "TRACK",
+    "spotifyId": "4uLU6hMCjMI75M1A2tKUQC",
+    "item": { "name": "Never Gonna Give You Up", "subtitle": "Rick Astley", "imageUrl": "https://..." },
+    "reviewCount": 8,
+    "averageRating": 4.4
+  }
+]
+```
+- 정렬: `reviewCount` 내림차순 → 같으면 `averageRating` 내림차순
+- `reviewCount`, `averageRating`은 기간(`days`) 안의 리뷰 기준
+- `item`은 그 항목의 가장 최근 리뷰에 저장된 표시용 정보
+
+---
+
+### 21. 유저의 리뷰 — `GET /api/users/{userId}/reviews`
+인증: ✅ · 프로필 화면 (내 프로필은 `GET /api/users/me`의 `id`로 호출)
+
+| 쿼리 | 기본값 | 설명 |
+|---|---|---|
+| page, size | 0, 20 | 최신순 |
+| type | 전체 | 타입 거르기 |
+| minRating | 없음 | 이 점수 이상만 (0.5 단위). 리뷰 기반 플리 생성: `type=TRACK&minRating=4.5` |
+
+**200 OK**
+```json
+{
+  "user": { "id": 1, "nickname": "음악덕후", "profileImageUrl": null, "createdAt": "2026-11-10T14:30:00+09:00" },
+  "stats": {
+    "reviewCount": 57,
+    "averageRating": 3.9,
+    "ratingDistribution": { "0.5": 0, "1.0": 1, "1.5": 0, "2.0": 2, "2.5": 3, "3.0": 8, "3.5": 12, "4.0": 15, "4.5": 7, "5.0": 9 },
+    "countByType": { "TRACK": 40, "ALBUM": 10, "PLAYLIST": 7 }
+  },
+  "reviews": { "...": "Page<ReviewResponse>" }
+}
+```
+- `user`에는 이메일이 없습니다 (다른 사람에게 보이는 정보).
+- `stats`는 `type`, `minRating` 필터와 **상관없이 그 유저의 전체** 리뷰 기준. 리뷰가 없으면 `averageRating`은 `null`
+- `countByType`은 세 타입 모두 항상 들어갑니다(없으면 0).
+
+**에러**: 400 `INVALID_ITEM_TYPE` / `INVALID_INPUT`, 404 `USER_NOT_FOUND`
+
+---
+
+### 22. 큐레이터 랭킹 — `GET /api/curators/ranking`
+인증: ✅
+
+플리 리뷰를 `ownerSpotifyId`(플리 주인)별로 묶어 평균 총점(`rating`) 순으로 정렬합니다.
+
+| 쿼리 | 기본값 | 설명 |
+|---|---|---|
+| minReviews | 3 | 받은 플리 리뷰가 이 수 이상인 주인만 (1~100) |
+| limit | 20 | 1~100 |
+
+**200 OK**
+```json
+[
+  {
+    "rank": 1,
+    "ownerSpotifyId": "smedjan",
+    "ownerName": "smedjan",
+    "playlistCount": 4,
+    "reviewCount": 23,
+    "averageRating": 4.6,
+    "averageScores": { "concept": 4.7, "flow": 4.5, "discovery": 4.2 }
+  }
+]
+```
+- 정렬: 평균 총점 내림차순 → 같으면 리뷰 수 내림차순
+- **순위**: 소수 첫째 자리로 반올림한 평균이 같으면 같은 순위 (1, 1, 3 방식)
+- `ownerName`: 그 주인의 가장 최근 플리 리뷰에 저장된 `item.subtitle`, 없으면 `ownerSpotifyId`
+- `playlistCount`: 리뷰가 달린 서로 다른 플리 수
+
+**에러**: 400 `INVALID_INPUT`
 
 ---
 
