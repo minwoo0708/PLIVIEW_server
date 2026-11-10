@@ -8,6 +8,7 @@ import com.musicreview.server.review.domain.Review;
 import com.musicreview.server.review.domain.ReviewRepository;
 import com.musicreview.server.review.dto.CreateReviewRequest;
 import com.musicreview.server.review.dto.ReviewResponse;
+import com.musicreview.server.review.dto.TrackRefRequest;
 import com.musicreview.server.review.dto.UpdateReviewRequest;
 import com.musicreview.server.user.UserService;
 import com.musicreview.server.user.domain.User;
@@ -50,6 +51,8 @@ public class ReviewService {
             review.changeSnapshotId(request.snapshotId());
             review.assignOwner(request.ownerSpotifyId().strip());
         }
+        applyHighlights(review, request.bestTrack(), request.worstTrack(), request.underratedTrack(),
+                request.bestMoment(), request.body());
 
         try {
             reviewRepository.saveAndFlush(review);
@@ -72,6 +75,7 @@ public class ReviewService {
             throw new BusinessException(ErrorCode.INVALID_REVIEW_FIELDS,
                     "곡·앨범 리뷰에는 conceptScore, flowScore, discoveryScore, snapshotId를 보낼 수 없습니다.");
         }
+        validateHighlights(review.getType(), request.hasHighlights(), request.underratedTrack() != null);
 
         if (request.item() != null) {
             review.changeItem(request.item().name().strip(), request.item().subtitle(), request.item().imageUrl());
@@ -91,6 +95,8 @@ public class ReviewService {
                 review.changeSnapshotId(request.snapshotId());
             }
         }
+        applyHighlights(review, request.bestTrack(), request.worstTrack(), request.underratedTrack(),
+                request.bestMoment(), request.body());
         reviewRepository.flush(); // updatedAt 반영
         return ReviewResponse.of(review, userId);
     }
@@ -133,8 +139,41 @@ public class ReviewService {
         return review;
     }
 
+    /** 하이라이트는 앨범·플리만, 과소평가된 곡은 앨범만 */
+    private static void validateHighlights(ItemType type, boolean hasHighlights, boolean hasUnderrated) {
+        if (type == ItemType.TRACK && hasHighlights) {
+            throw new BusinessException(ErrorCode.INVALID_REVIEW_FIELDS,
+                    "곡 리뷰에는 bestTrack, worstTrack, underratedTrack, bestMoment, body를 보낼 수 없습니다.");
+        }
+        if (type == ItemType.PLAYLIST && hasUnderrated) {
+            throw new BusinessException(ErrorCode.INVALID_REVIEW_FIELDS,
+                    "underratedTrack(가장 과소평가된 곡)은 앨범 리뷰에만 쓸 수 있습니다.");
+        }
+    }
+
+    /** null인 항목은 그대로 둠 (작성 시에는 null = 없음) */
+    private static void applyHighlights(Review review, TrackRefRequest best, TrackRefRequest worst,
+                                        TrackRefRequest underrated, String bestMoment, String body) {
+        if (best != null) {
+            review.changeBestTrack(best.spotifyId(), best.name().strip());
+        }
+        if (worst != null) {
+            review.changeWorstTrack(worst.spotifyId(), worst.name().strip());
+        }
+        if (underrated != null) {
+            review.changeUnderratedTrack(underrated.spotifyId(), underrated.name().strip());
+        }
+        if (bestMoment != null) {
+            review.changeBestMoment(bestMoment);
+        }
+        if (body != null) {
+            review.changeBody(body);
+        }
+    }
+
     /** 플리는 항목 점수 3개 + 주인 id가 필수, 곡·앨범은 플리 전용 필드 금지 */
     private void validateTypeSpecificFields(CreateReviewRequest request) {
+        validateHighlights(request.type(), request.hasHighlights(), request.underratedTrack() != null);
         if (request.type() == ItemType.PLAYLIST) {
             List<String> missing = new ArrayList<>();
             if (request.conceptScore() == null) missing.add("conceptScore");
