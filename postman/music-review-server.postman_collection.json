@@ -344,6 +344,53 @@
       ]
     },
     {
+      "name": "5. 홈·프로필·랭킹",
+      "item": [
+        {
+          "name": "최신 리뷰 피드",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('페이지 형식', () => pm.expect(pm.response.json()).to.have.property('content'));"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/feed?page=0&size=20", "description": "type=TRACK|ALBUM|PLAYLIST 로 거르기 가능" }
+        },
+        {
+          "name": "인기 항목",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('배열 응답', () => pm.expect(pm.response.json()).to.be.an('array'));"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/feed/popular?days=7&limit=10" }
+        },
+        {
+          "name": "내 프로필 (리뷰 + 통계)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "if (pm.response.code === 200) {",
+            "    const body = pm.response.json();",
+            "    pm.test('user, stats, reviews 포함', () => pm.expect(body).to.include.keys('user', 'stats', 'reviews'));",
+            "    pm.test('이메일은 공개되지 않음', () => pm.expect(body.user).to.not.have.property('email'));",
+            "}"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/users/{{myId}}/reviews?page=0&size=20" }
+        },
+        {
+          "name": "4.5점 이상 곡 (리뷰 기반 플리 생성용)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/users/{{myId}}/reviews?type=TRACK&minRating=4.5&size=50" }
+        },
+        {
+          "name": "큐레이터 랭킹",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));"
+          ] } }],
+          "request": { "method": "GET", "header": [], "url": "{{baseUrl}}/api/curators/ranking?minReviews=1&limit=20", "description": "기본 minReviews=3. 혼자 테스트할 때는 1로" }
+        }
+      ]
+    },
+    {
       "name": "9. 탈퇴 (주의: 계정 삭제)",
       "item": [
         {
