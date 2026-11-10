@@ -92,6 +92,34 @@ public class Review extends BaseTimeEntity {
     @Column(name = "owner_spotify_id", length = 64)
     private String ownerSpotifyId;
 
+    // 앨범·플리 전용 하이라이트 (곡 리뷰는 null)
+    @Column(name = "best_track_id", length = 64)
+    private String bestTrackId;
+
+    @Column(name = "best_track_name", length = 200)
+    private String bestTrackName;
+
+    @Column(name = "worst_track_id", length = 64)
+    private String worstTrackId;
+
+    @Column(name = "worst_track_name", length = 200)
+    private String worstTrackName;
+
+    /** 가장 과소평가된 곡: 앨범만 */
+    @Column(name = "underrated_track_id", length = 64)
+    private String underratedTrackId;
+
+    @Column(name = "underrated_track_name", length = 200)
+    private String underratedTrackName;
+
+    /** 최고의 순간 (예: "2:31 브릿지에서 터지는 코러스") */
+    @Column(name = "best_moment", length = 100)
+    private String bestMoment;
+
+    /** 전체 평가 (여러 줄) */
+    @Column(name = "body", length = 2000)
+    private String body;
+
     @ElementCollection
     @CollectionTable(name = "review_tags", joinColumns = @JoinColumn(name = "review_id"),
             foreignKey = @ForeignKey(name = "fk_review_tags_review"))
@@ -154,6 +182,36 @@ public class Review extends BaseTimeEntity {
 
     public void assignOwner(String ownerSpotifyId) {
         this.ownerSpotifyId = ownerSpotifyId;
+    }
+
+    public boolean isTrack() {
+        return type == ItemType.TRACK;
+    }
+
+    /** null이면 그대로 둠 */
+    public void changeBestTrack(String spotifyId, String name) {
+        this.bestTrackId = spotifyId;
+        this.bestTrackName = name;
+    }
+
+    public void changeWorstTrack(String spotifyId, String name) {
+        this.worstTrackId = spotifyId;
+        this.worstTrackName = name;
+    }
+
+    public void changeUnderratedTrack(String spotifyId, String name) {
+        this.underratedTrackId = spotifyId;
+        this.underratedTrackName = name;
+    }
+
+    /** 빈 문자열이면 삭제 */
+    public void changeBestMoment(String bestMoment) {
+        this.bestMoment = blankToNull(bestMoment);
+    }
+
+    /** 빈 문자열이면 삭제. 줄바꿈은 그대로 저장 */
+    public void changeBody(String body) {
+        this.body = (body == null || body.isBlank()) ? null : body.strip();
     }
 
     private static String blankToNull(String value) {

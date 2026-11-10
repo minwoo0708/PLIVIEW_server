@@ -2,11 +2,14 @@ package com.musicreview.server.curator.dto;
 
 import java.math.BigDecimal;
 
-/** docs/API.md 22. 큐레이터(플리 주인) 랭킹 한 줄 */
+/** docs/API.md 22. 베스트 큐레이터 랭킹 한 줄 (Spotify를 연동한 사용자만) */
 public record CuratorRankingResponse(
         int rank,
-        String ownerSpotifyId,
-        String ownerName,
+        Long userId,
+        String nickname,
+        String profileImageUrl,
+        String spotifyUserId,
+        String spotifyDisplayName,
         long playlistCount,
         long reviewCount,
         BigDecimal averageRating,

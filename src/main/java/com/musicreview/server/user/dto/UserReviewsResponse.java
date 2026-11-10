@@ -17,11 +17,12 @@ public record UserReviewsResponse(
 ) {
 
     /** 다른 사람에게 보이는 정보 (이메일 없음) */
-    public record PublicUser(Long id, String nickname, String profileImageUrl, OffsetDateTime createdAt) {
+    public record PublicUser(Long id, String nickname, String profileImageUrl,
+                             UserResponse.SpotifyAccount spotify, OffsetDateTime createdAt) {
 
         public static PublicUser from(User user) {
             return new PublicUser(user.getId(), user.getNickname(), user.getProfileImageUrl(),
-                    TimeUtils.toOffset(user.getCreatedAt()));
+                    UserResponse.SpotifyAccount.from(user), TimeUtils.toOffset(user.getCreatedAt()));
         }
     }
 

@@ -1,7 +1,8 @@
 package com.musicreview.server.review.domain;
 
-/** 플리 주인(큐레이터)별 집계 결과 */
+/** 큐레이터(Spotify를 연동한 사용자)별 플리 집계 결과 */
 public record CuratorRow(
+        Long userId,
         String ownerSpotifyId,
         Long playlistCount,
         Long reviewCount,

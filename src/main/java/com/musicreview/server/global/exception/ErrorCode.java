@@ -17,6 +17,7 @@ public enum ErrorCode {
     // 401
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "로그인이 필요합니다."),
     LOGIN_FAILED(HttpStatus.UNAUTHORIZED, "이메일 또는 비밀번호가 틀렸습니다."),
+    SPOTIFY_TOKEN_INVALID(HttpStatus.UNAUTHORIZED, "Spotify 로그인 정보가 유효하지 않습니다. 다시 연동해 주세요."),
 
     // 403
     FORBIDDEN(HttpStatus.FORBIDDEN, "권한이 없습니다."),
@@ -27,6 +28,7 @@ public enum ErrorCode {
     USER_NOT_FOUND(HttpStatus.NOT_FOUND, "사용자를 찾을 수 없습니다."),
     REVIEW_NOT_FOUND(HttpStatus.NOT_FOUND, "리뷰를 찾을 수 없습니다."),
     SPOTIFY_NOT_FOUND(HttpStatus.NOT_FOUND, "Spotify에서 해당 항목을 찾을 수 없습니다."),
+    CURATOR_NOT_FOUND(HttpStatus.NOT_FOUND, "Spotify를 연동한 큐레이터가 아닙니다."),
 
     // 405
     METHOD_NOT_ALLOWED(HttpStatus.METHOD_NOT_ALLOWED, "지원하지 않는 HTTP 메서드입니다."),
@@ -34,6 +36,7 @@ public enum ErrorCode {
     // 409
     EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 사용 중인 이메일입니다."),
     REVIEW_ALREADY_EXISTS(HttpStatus.CONFLICT, "이미 이 항목에 리뷰를 작성했습니다."),
+    SPOTIFY_ALREADY_LINKED(HttpStatus.CONFLICT, "이미 다른 PLIVIEW 계정에 연동된 Spotify 계정입니다."),
 
     // 429
     SPOTIFY_RATE_LIMITED(HttpStatus.TOO_MANY_REQUESTS, "Spotify 요청이 많습니다. 잠시 후 다시 시도해 주세요."),

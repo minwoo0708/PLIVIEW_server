@@ -2,7 +2,7 @@
 
 > 서버: Spring Boot 4.1 / Java 21 / MySQL 8.4
 > 클라이언트: Flutter (안드로이드 앱 + 웹)
-> 버전: v0.3 (전체 기능 구현: 피드, 인기 항목, 유저 통계, 큐레이터 랭킹 추가)
+> 버전: v0.4 (앱 요청 반영: 앨범·플리 리뷰 하이라이트, 곡별 평점 일괄 조회, Spotify 계정 연동, 베스트 큐레이터 개편, 이번 주의 플리)
 
 ---
 
@@ -87,14 +87,17 @@
 | 400 | `PASSWORD_MISMATCH` | 비밀번호 변경·탈퇴 시 현재 비밀번호가 틀림 |
 | 401 | `UNAUTHORIZED` | JWT 없음, 만료, 위조 |
 | 401 | `LOGIN_FAILED` | 이메일 또는 비밀번호가 틀림 (어느 쪽인지 알려 주지 않음) |
+| 401 | `SPOTIFY_TOKEN_INVALID` | Spotify 연동 시 보낸 사용자 토큰이 만료·잘못됨, 또는 개발 모드 미등록 계정(메시지로 구분) |
 | 403 | `REVIEW_FORBIDDEN` | 남의 리뷰를 수정·삭제하려 함 |
 | 404 | `USER_NOT_FOUND` | 없는 사용자 (탈퇴한 사용자의 토큰 포함) |
 | 404 | `REVIEW_NOT_FOUND` | 없는 리뷰 |
 | 404 | `SPOTIFY_NOT_FOUND` | Spotify에 없는 곡·앨범·플리 (비공개 플리 포함) |
+| 404 | `CURATOR_NOT_FOUND` | 큐레이터 프로필 요청 대상이 Spotify를 연동하지 않은 사용자 |
 | 404 | `NOT_FOUND` | 없는 API 경로 |
 | 405 | `METHOD_NOT_ALLOWED` | 지원하지 않는 HTTP 메서드 |
 | 409 | `EMAIL_ALREADY_EXISTS` | 이미 가입된 이메일 |
 | 409 | `REVIEW_ALREADY_EXISTS` | 같은 항목에 이미 리뷰를 씀 (항목당 1개) |
+| 409 | `SPOTIFY_ALREADY_LINKED` | 그 Spotify 계정이 이미 다른 PLIVIEW 계정에 연동됨 |
 | 429 | `SPOTIFY_RATE_LIMITED` | Spotify 호출 한도 초과, 잠시 후 재시도 |
 | 502 | `SPOTIFY_UNAVAILABLE` | Spotify 서버 오류·시간 초과 |
 | 503 | `SPOTIFY_NOT_CONFIGURED` | 서버에 Spotify Client ID/Secret이 설정되지 않음 |
@@ -128,9 +131,15 @@
 | 19 | GET | `/api/feed` | 최신 리뷰 피드 | ✅ | 권장 |
 | 20 | GET | `/api/feed/popular` | 리뷰 많은 곡·앨범·플리 | ✅ | 권장 |
 | 21 | GET | `/api/users/{userId}/reviews` | 유저의 리뷰 목록 + 별점 분포 | ✅ | 권장 |
-| 22 | GET | `/api/curators/ranking` | 플리 주인별 평균 점수 순위 | ✅ | 추가 |
+| 22 | GET | `/api/curators/ranking` | 베스트 큐레이터 (Spotify 연동한 사용자만) | ✅ | 추가 |
+| 23 | PUT | `/api/users/me/spotify` | Spotify 계정 연동 | ✅ | v0.4 |
+| 24 | DELETE | `/api/users/me/spotify` | Spotify 연동 해제 | ✅ | v0.4 |
+| 25 | GET | `/api/items/tracks/ratings` | 곡 여러 개의 평점 일괄 조회 (앨범·플리 수록곡 목록용) | ✅ | v0.4 |
+| 26 | GET | `/api/feed/weekly-playlists` | 이번 주의 플리 (리뷰 많고 평점 높은 플리) | ✅ | v0.4 |
+| 27 | GET | `/api/curators/{userId}` | 큐레이터 프로필 | ✅ | v0.4 |
+| 28 | GET | `/api/curators/{userId}/playlists` | 큐레이터의 플리 목록 (인기순) | ✅ | v0.4 |
 
-**앱이 Spotify를 직접 호출하는 기능**: 최근 재생곡, 내 Spotify 플리 목록, 플리 팔로우, 리뷰 기반 플리 생성은 사용자 본인의 Spotify 계정이 필요합니다. 앱이 PKCE로 Spotify에 직접 로그인(설정 > Spotify 연동)해서 호출하고, 이 서버는 관여하지 않습니다.
+**앱이 Spotify를 직접 호출하는 기능**: 최근 재생곡, 내 Spotify 플리 목록, 플리 팔로우, 리뷰 기반 플리 생성은 사용자 본인의 Spotify 계정이 필요합니다. 앱이 PKCE로 Spotify에 직접 로그인해서 호출합니다. 그때 받은 토큰을 `PUT /api/users/me/spotify`로 한 번 보내면 서버가 계정을 확인해 **연동 상태로 저장**합니다(토큰은 저장하지 않음). 연동한 사용자만 베스트 큐레이터가 됩니다.
 
 ---
 
@@ -143,10 +152,12 @@
   "email": "me@example.com",
   "nickname": "음악덕후",
   "profileImageUrl": null,
+  "spotify": { "userId": "smedjan", "displayName": "Smedjan" },
   "createdAt": "2026-11-10T14:30:00+09:00"
 }
 ```
 - `email`은 `GET/PATCH /api/users/me`와 회원가입·로그인 응답에만 들어갑니다. 다른 사람 정보(리뷰 작성자 등)에는 없습니다.
+- `spotify`: Spotify를 연동했으면 계정 정보, 안 했으면 `null`. **앱은 이 값으로 프로필 화면(연동 전/후)을 나눕니다.**
 
 ### 3.2 `ReviewResponse`
 ```json
@@ -169,6 +180,13 @@
     "snapshotId": "MTY4NjY2...",
     "ownerSpotifyId": "smedjan"
   },
+  "highlights": {
+    "bestTrack": { "spotifyId": "4uLU6hMCjMI75M1A2tKUQC", "name": "Midnight Drive" },
+    "worstTrack": { "spotifyId": "11dFghVXANMlKmJXsNCbNl", "name": "Interlude" },
+    "underratedTrack": null,
+    "bestMoment": "2:31 브릿지에서 터지는 코러스",
+    "body": "전체적으로 새벽 감성이 잘 이어진다.\n다만 중반부가 조금 늘어진다."
+  },
   "author": { "id": 1, "nickname": "음악덕후", "profileImageUrl": null },
   "isMine": true,
   "createdAt": "2026-11-10T14:30:00+09:00",
@@ -178,6 +196,8 @@
 - `item`: 리뷰 작성 시 앱이 보낸 표시용 정보. 피드·프로필에서 Spotify를 다시 호출하지 않고 바로 보여 주기 위해 저장합니다.
   - `subtitle`: 곡·앨범이면 아티스트, 플리면 주인 표시 이름
 - `playlistScores`: `type`이 `PLAYLIST`일 때만 값이 있고, 곡·앨범이면 `null`
+- `highlights`: 앨범·플리 리뷰면 객체(안의 값은 각각 없으면 `null`), **곡 리뷰면 `null`**
+  - `bestTrack` 최고의 곡 · `worstTrack` 워스트 곡 · `underratedTrack` 가장 과소평가된 곡(**앨범만**) · `bestMoment` 최고의 순간 · `body` 전체 평가(여러 줄)
 - `tags`: 가나다순
 - `isMine`: 요청한 사용자가 작성자이면 `true`
 
@@ -358,6 +378,30 @@
 | snapshotId | String | ❌ 보내면 400 | 선택 | 최대 100자 (Spotify `snapshot_id`) |
 | ownerSpotifyId | String | ❌ 보내면 400 | ✅ | 최대 64자 (Spotify `owner.id`) |
 
+**앨범·플리 하이라이트** (v0.4, 모두 선택. **곡 리뷰에 보내면 400 `INVALID_REVIEW_FIELDS`**)
+
+| 필드 | 앨범 | 플리 | 규칙 |
+|---|---|---|---|
+| bestTrack | 선택 | 선택 | 최고의 곡 `{ "spotifyId": "영문·숫자 1~64자", "name": "1~200자" }` |
+| worstTrack | 선택 | 선택 | 워스트 곡, 형식 같음 |
+| underratedTrack | 선택 | ❌ 보내면 400 | 가장 과소평가된 곡 (**앨범만**), 형식 같음 |
+| bestMoment | 선택 | 선택 | 최고의 순간, 최대 100자 (예: `"2:31 브릿지"`) |
+| body | 선택 | 선택 | 전체 평가, 최대 2000자, **줄바꿈 그대로 저장** |
+
+```json
+{
+  "type": "ALBUM", "spotifyId": "4aawyAB9vmqN3uQ7FjRGTy",
+  "item": { "name": "Global Warming", "subtitle": "Pitbull" },
+  "rating": 4.0,
+  "bestTrack": { "spotifyId": "t1", "name": "Don't Stop the Party" },
+  "worstTrack": { "spotifyId": "t2", "name": "Outro" },
+  "underratedTrack": { "spotifyId": "t3", "name": "Hope We Meet Again" },
+  "bestMoment": "1:05 드롭",
+  "body": "파티 앨범으로는 최고.\n후반부는 조금 늘어진다."
+}
+```
+> "필수로 고르게 할지"는 앱 화면에서 정합니다. 서버는 모두 선택 항목으로 받습니다.
+
 **201 Created**: `ReviewResponse`, 헤더 `Location: /api/reviews/{id}`
 **에러**: 400 `INVALID_INPUT` / `INVALID_REVIEW_FIELDS`, 409 `REVIEW_ALREADY_EXISTS`
 
@@ -391,6 +435,8 @@
 | comment | `""`(빈 문자열)을 보내면 한 줄 평 삭제 |
 | tags | 보내면 **전체 교체**, `[]`이면 모두 삭제 |
 | conceptScore, flowScore, discoveryScore, snapshotId | 플리 리뷰만 가능, 곡·앨범에 보내면 400 `INVALID_REVIEW_FIELDS` |
+| bestTrack, worstTrack, underratedTrack | 보내면 교체 (지우기는 지원 안 함, 다른 곡으로 바꾸기만). 규칙은 작성 때와 같음 |
+| bestMoment, body | 보내면 교체, `""`이면 삭제 |
 
 **200 OK**: `ReviewResponse`
 **에러**: 400 `INVALID_INPUT` / `INVALID_REVIEW_FIELDS`, 403 `REVIEW_FORBIDDEN`, 404 `REVIEW_NOT_FOUND`
@@ -511,7 +557,8 @@
 **200 OK**
 ```json
 {
-  "user": { "id": 1, "nickname": "음악덕후", "profileImageUrl": null, "createdAt": "2026-11-10T14:30:00+09:00" },
+  "user": { "id": 1, "nickname": "음악덕후", "profileImageUrl": null,
+            "spotify": { "userId": "smedjan", "displayName": "Smedjan" }, "createdAt": "2026-11-10T14:30:00+09:00" },
   "stats": {
     "reviewCount": 57,
     "averageRating": 3.9,
@@ -524,19 +571,23 @@
 - `user`에는 이메일이 없습니다 (다른 사람에게 보이는 정보).
 - `stats`는 `type`, `minRating` 필터와 **상관없이 그 유저의 전체** 리뷰 기준. 리뷰가 없으면 `averageRating`은 `null`
 - `countByType`은 세 타입 모두 항상 들어갑니다(없으면 0).
+- `user.spotify`: Spotify 연동 여부 (연동 안 했으면 `null`)
+- **별 5점 모아 보기**(프로필에서 5점 칸을 눌렀을 때): `minRating=5.0`에 타입별로 호출
+  `?type=TRACK&minRating=5.0` · `?type=ALBUM&minRating=5.0` · `?type=PLAYLIST&minRating=5.0`
+  각 탭의 개수는 `ratingDistribution["5.0"]`이 전체 개수, 타입별 개수는 각 응답의 `reviews.totalElements`
 
 **에러**: 400 `INVALID_ITEM_TYPE` / `INVALID_INPUT`, 404 `USER_NOT_FOUND`
 
 ---
 
-### 22. 큐레이터 랭킹 — `GET /api/curators/ranking`
+### 22. 베스트 큐레이터 랭킹 — `GET /api/curators/ranking`
 인증: ✅
 
-플리 리뷰를 `ownerSpotifyId`(플리 주인)별로 묶어 평균 총점(`rating`) 순으로 정렬합니다.
+**Spotify를 연동한 PLIVIEW 사용자만** 큐레이터가 됩니다(v0.4 변경). 그 사람의 Spotify 계정이 주인(`owner.id`)인 플리에 달린 리뷰를 모아 평균 총점(`rating`) 순으로 정렬합니다. 연동하지 않은 주인의 플리는 평점이 높아도 랭킹에 나오지 않습니다.
 
 | 쿼리 | 기본값 | 설명 |
 |---|---|---|
-| minReviews | 3 | 받은 플리 리뷰가 이 수 이상인 주인만 (1~100) |
+| minReviews | 3 | 받은 플리 리뷰가 이 수 이상인 사람만 (1~100) |
 | limit | 20 | 1~100 |
 
 **200 OK**
@@ -544,8 +595,11 @@
 [
   {
     "rank": 1,
-    "ownerSpotifyId": "smedjan",
-    "ownerName": "smedjan",
+    "userId": 7,
+    "nickname": "플리장인",
+    "profileImageUrl": null,
+    "spotifyUserId": "smedjan",
+    "spotifyDisplayName": "Smedjan",
     "playlistCount": 4,
     "reviewCount": 23,
     "averageRating": 4.6,
@@ -555,10 +609,123 @@
 ```
 - 정렬: 평균 총점 내림차순 → 같으면 리뷰 수 내림차순
 - **순위**: 소수 첫째 자리로 반올림한 평균이 같으면 같은 순위 (1, 1, 3 방식)
-- `ownerName`: 그 주인의 가장 최근 플리 리뷰에 저장된 `item.subtitle`, 없으면 `ownerSpotifyId`
 - `playlistCount`: 리뷰가 달린 서로 다른 플리 수
+- 항목을 누르면 `userId`로 **27. 큐레이터 프로필**로 이동
 
 **에러**: 400 `INVALID_INPUT`
+
+---
+
+### 23. Spotify 계정 연동 — `PUT /api/users/me/spotify`
+인증: ✅
+
+앱이 PKCE로 Spotify에 로그인해서 받은 **사용자 Spotify Access Token**을 보냅니다. 서버는 Spotify `GET /v1/me`로 계정을 확인하고 Spotify 계정 id와 표시 이름만 저장합니다. **토큰은 저장하지 않습니다.**
+
+```json
+{ "spotifyAccessToken": "BQDx...." }
+```
+
+**200 OK**: `UserResponse` (`spotify`에 연동 정보가 채워짐). 같은 계정으로 다시 보내도 성공합니다.
+**에러**: 400 `INVALID_INPUT`, 401 `SPOTIFY_TOKEN_INVALID` (토큰 만료·잘못됨, 또는 개발 모드에서 Dashboard 사용자 목록에 없는 계정. 메시지가 다름), 409 `SPOTIFY_ALREADY_LINKED`, 502 `SPOTIFY_UNAVAILABLE`
+
+> Spotify 개발 모드에서는 Dashboard → User Management에 등록한 계정(최대 25명)만 연동할 수 있습니다.
+
+---
+
+### 24. Spotify 연동 해제 — `DELETE /api/users/me/spotify`
+인증: ✅ · 본문 없음
+
+**200 OK**: `UserResponse` (`spotify: null`). 연동을 해제하면 베스트 큐레이터 랭킹에서 빠집니다(리뷰는 남음).
+
+---
+
+### 25. 곡별 평점 일괄 조회 — `GET /api/items/tracks/ratings`
+인증: ✅ · 앨범·플리 화면의 수록곡 목록에 곡마다 평점 표시
+
+| 쿼리 | 필수 | 설명 |
+|---|---|---|
+| spotifyIds | ✅ | 곡 id를 쉼표로 구분, 1~100개 (플리 한 페이지 분량) |
+
+**200 OK**: 요청한 순서대로(중복은 한 번), **리뷰가 없는 곡도 포함**
+```json
+[
+  { "spotifyId": "4uLU6hMCjMI75M1A2tKUQC", "reviewCount": 12, "averageRating": 4.3, "myRating": 5.0 },
+  { "spotifyId": "11dFghVXANMlKmJXsNCbNl", "reviewCount": 0, "averageRating": null, "myRating": null }
+]
+```
+- 곡(`TRACK`) 리뷰만 셉니다. `myRating`은 내가 그 곡에 준 별점(없으면 `null`)
+- 곡을 누르면 곡 상세 → 곡 리뷰(별점 + 한 줄 평)는 기존 12번 `type: "TRACK"`으로 작성
+
+**에러**: 400 `INVALID_INPUT` (잘못된 id, 100개 초과)
+
+---
+
+### 26. 이번 주의 플리 — `GET /api/feed/weekly-playlists`
+인증: ✅ · 홈 화면
+
+리뷰가 충분히 쌓인(기본 **50개 이상**) 플리를 평균 총점 높은 순으로 보여 줍니다.
+
+| 쿼리 | 기본값 | 설명 |
+|---|---|---|
+| minReviews | 50 | 이 수 이상 리뷰가 달린 플리만 (1~1000) |
+| days | 없음(전체 기간) | 최근 N일 동안 달린 리뷰만으로 계산 (1~365). "이번 주에 반응이 좋은 플리"로 하려면 `days=7` |
+| limit | 10 | 1~50 |
+
+**200 OK**
+```json
+[
+  {
+    "rank": 1,
+    "spotifyId": "37i9dQZF1DXcBWIGoYBM5M",
+    "item": { "name": "새벽 드라이브", "subtitle": "Smedjan", "imageUrl": "https://..." },
+    "reviewCount": 64,
+    "averageRating": 4.7
+  }
+]
+```
+- 정렬: 평균 총점 내림차순 → 같으면 리뷰 수 내림차순. 조건에 맞는 플리가 없으면 `[]` (서비스 초반엔 비어 있을 수 있으니 앱에서 빈 상태 처리 필요)
+
+**에러**: 400 `INVALID_INPUT`
+
+---
+
+### 27. 큐레이터 프로필 — `GET /api/curators/{userId}`
+인증: ✅ · 랭킹에서 누르면 나오는 화면 위쪽
+
+**200 OK**
+```json
+{
+  "userId": 7,
+  "nickname": "플리장인",
+  "profileImageUrl": null,
+  "spotifyUserId": "smedjan",
+  "spotifyDisplayName": "Smedjan",
+  "playlistCount": 4,
+  "reviewCount": 23,
+  "averageRating": 4.6,
+  "averageScores": { "concept": 4.7, "flow": 4.5, "discovery": 4.2 },
+  "createdAt": "2026-11-10T14:30:00+09:00"
+}
+```
+- 받은 리뷰가 없으면 `playlistCount`·`reviewCount`는 0, 평균은 `null`
+- 이메일은 없습니다.
+
+**에러**: 404 `CURATOR_NOT_FOUND` (없는 사용자이거나 Spotify를 연동하지 않은 사용자)
+
+---
+
+### 28. 큐레이터의 플리 목록 — `GET /api/curators/{userId}/playlists`
+인증: ✅ · 큐레이터 프로필 화면 아래쪽, **인기순**
+
+| 쿼리 | 기본값 | 설명 |
+|---|---|---|
+| page, size | 0, 20 | 1.5 참고 |
+
+**200 OK**: `Page<{ type, spotifyId, item, reviewCount, averageRating }>`
+- 인기순 = 리뷰 수 내림차순 → 평균 총점 내림차순
+- PLIVIEW에서 **리뷰가 1개 이상 달린 플리만** 나옵니다.
+
+**에러**: 404 `CURATOR_NOT_FOUND`
 
 ---
 
@@ -574,3 +741,7 @@
 | 6 | 닉네임 중복 허용 | 로그인은 이메일로 하므로 닉네임은 표시용 |
 | 7 | 리프레시 토큰 없이 JWT 7일 | 개인 프로젝트 범위. 필요해지면 추가 |
 | 8 | Spring Boot 3 대신 4.1.2 | start.spring.io가 Boot 3을 더 이상 제공하지 않음 |
+| 9 | 앨범·플리 하이라이트(최고·워스트·과소평가 곡, 최고의 순간, 전체 평가)는 **서버에서 모두 선택 항목** | 필수 여부는 앱 화면에서 정하도록. 곡은 id + 이름을 함께 저장해 피드에서 Spotify 재호출 없이 표시 |
+| 10 | 베스트 큐레이터 = **Spotify를 연동한 사용자**만 | 플리 주인이 실제 PLIVIEW 사용자여야 프로필로 이어짐 |
+| 11 | Spotify 연동은 앱이 받은 토큰을 서버가 `/v1/me`로 확인만 하고 **토큰은 저장 안 함** | 서버가 사용자 Spotify 권한을 들고 있을 이유가 없음 |
+| 12 | 이번 주의 플리 기본 기준은 **리뷰 50개 이상, 전체 기간**, `days`로 기간 제한 가능 | 사용자 요청(리뷰 50개 이상). 초반 데이터가 적을 때 확인하려면 `minReviews`를 낮춰 호출 |

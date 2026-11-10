@@ -13,7 +13,10 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "users", uniqueConstraints = @UniqueConstraint(name = "uk_users_email", columnNames = "email"))
+@Table(name = "users", uniqueConstraints = {
+        @UniqueConstraint(name = "uk_users_email", columnNames = "email"),
+        @UniqueConstraint(name = "uk_users_spotify_user_id", columnNames = "spotify_user_id")
+})
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User extends BaseTimeEntity {
@@ -36,6 +39,13 @@ public class User extends BaseTimeEntity {
     @Column(name = "profile_image_url", length = 500)
     private String profileImageUrl;
 
+    /** 연동한 Spotify 계정 id (= 플리의 owner.id). 연동 안 했으면 null */
+    @Column(name = "spotify_user_id", length = 64)
+    private String spotifyUserId;
+
+    @Column(name = "spotify_display_name", length = 100)
+    private String spotifyDisplayName;
+
     private User(String email, String passwordHash, String nickname) {
         this.email = email;
         this.passwordHash = passwordHash;
@@ -57,5 +67,19 @@ public class User extends BaseTimeEntity {
 
     public void changePasswordHash(String passwordHash) {
         this.passwordHash = passwordHash;
+    }
+
+    public boolean isSpotifyLinked() {
+        return spotifyUserId != null;
+    }
+
+    public void linkSpotify(String spotifyUserId, String displayName) {
+        this.spotifyUserId = spotifyUserId;
+        this.spotifyDisplayName = displayName;
+    }
+
+    public void unlinkSpotify() {
+        this.spotifyUserId = null;
+        this.spotifyDisplayName = null;
     }
 }

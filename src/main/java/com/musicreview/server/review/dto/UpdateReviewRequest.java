@@ -35,10 +35,32 @@ public record UpdateReviewRequest(
         BigDecimal discoveryScore,
 
         @Size(max = 100, message = "snapshotId는 100자 이하여야 합니다.")
-        String snapshotId
+        String snapshotId,
+
+        // ===== 앨범·플리 하이라이트: null이면 그대로, bestMoment·body는 ""이면 삭제 =====
+
+        @Valid
+        TrackRefRequest bestTrack,
+
+        @Valid
+        TrackRefRequest worstTrack,
+
+        @Valid
+        TrackRefRequest underratedTrack,
+
+        @Size(max = 100, message = "최고의 순간은 100자 이하여야 합니다.")
+        String bestMoment,
+
+        @Size(max = 2000, message = "전체 평가는 2000자 이하여야 합니다.")
+        String body
 ) {
 
     public boolean hasPlaylistFields() {
         return conceptScore != null || flowScore != null || discoveryScore != null || snapshotId != null;
+    }
+
+    public boolean hasHighlights() {
+        return bestTrack != null || worstTrack != null || underratedTrack != null
+                || bestMoment != null || body != null;
     }
 }
