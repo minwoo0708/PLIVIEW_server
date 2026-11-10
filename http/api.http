@@ -1,0 +1,135 @@
+### IntelliJ HTTP Client 요청 모음 (docs/API.md 기준)
+### 사용법: 우측 상단 환경을 'local'로 선택 → 요청 옆 ▶ 클릭
+### 로그인 요청을 먼저 실행하면 jwt 변수가 자동 저장됩니다.
+### spotifyToken은 http/http-client.private.env.json 에 넣으세요 (git에 올라가지 않음)
+
+### 0. 서버 동작 확인
+GET {{baseUrl}}/api/hello
+
+### 1. 로그인 (Spotify 토큰 → 서버 JWT)
+POST {{baseUrl}}/api/auth/spotify
+Content-Type: application/json
+
+{
+  "spotifyAccessToken": "{{spotifyToken}}"
+}
+
+> {%
+    client.global.set("jwt", response.body.accessToken);
+    client.global.set("myId", response.body.user.id);
+%}
+
+### 2. 내 정보
+GET {{baseUrl}}/api/users/me
+Authorization: Bearer {{jwt}}
+
+### 3. 닉네임 수정
+PATCH {{baseUrl}}/api/users/me
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{
+  "nickname": "음악덕후"
+}
+
+### 4-1. 리뷰 작성 (곡)
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{
+  "type": "TRACK",
+  "spotifyId": "4uLU6hMCjMI75M1A2tKUQC",
+  "item": {
+    "name": "Never Gonna Give You Up",
+    "subtitle": "Rick Astley",
+    "imageUrl": "https://i.scdn.co/image/ab67616d0000b27315ebbedaacef61af244262a8"
+  },
+  "rating": 4.5,
+  "comment": "몇 번을 들어도 좋다",
+  "tags": ["신나는", "80년대"]
+}
+
+> {% client.global.set("reviewId", response.body.id); %}
+
+### 4-2. 리뷰 작성 (플레이리스트)
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{
+  "type": "PLAYLIST",
+  "spotifyId": "3cEYpjA9oz9GiPac4AsH4n",
+  "item": {
+    "name": "새벽 드라이브",
+    "subtitle": "smedjan",
+    "imageUrl": "https://i.scdn.co/image/ab67706c0000da84"
+  },
+  "rating": 4.5,
+  "conceptScore": 5.0,
+  "flowScore": 4.5,
+  "discoveryScore": 3.5,
+  "snapshotId": "MTY4NjY2OTQ0MCwwMDAwMDAwMA==",
+  "ownerSpotifyId": "smedjan",
+  "comment": "곡 순서가 자연스럽다",
+  "tags": ["드라이브"]
+}
+
+### 4-3. 검증 실패 예시 (곡 리뷰에 플리 필드) → 400 INVALID_REVIEW_FIELDS
+POST {{baseUrl}}/api/reviews
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{
+  "type": "TRACK",
+  "spotifyId": "11dFghVXANMlKmJXsNCbNl",
+  "item": { "name": "Cut To The Feeling" },
+  "rating": 4.0,
+  "flowScore": 3.0
+}
+
+### 5. 리뷰 단건 조회
+GET {{baseUrl}}/api/reviews/{{reviewId}}
+Authorization: Bearer {{jwt}}
+
+### 6. 리뷰 수정
+PATCH {{baseUrl}}/api/reviews/{{reviewId}}
+Authorization: Bearer {{jwt}}
+Content-Type: application/json
+
+{
+  "rating": 5.0,
+  "tags": ["명곡"]
+}
+
+### 7. 리뷰 삭제
+DELETE {{baseUrl}}/api/reviews/{{reviewId}}
+Authorization: Bearer {{jwt}}
+
+### 8. 항목의 리뷰 목록
+GET {{baseUrl}}/api/items/track/4uLU6hMCjMI75M1A2tKUQC/reviews?page=0&size=20&sort=latest
+Authorization: Bearer {{jwt}}
+
+### 9. 항목 요약
+GET {{baseUrl}}/api/items/playlist/3cEYpjA9oz9GiPac4AsH4n/summary
+Authorization: Bearer {{jwt}}
+
+### 10. 최신 피드
+GET {{baseUrl}}/api/feed?page=0&size=20
+Authorization: Bearer {{jwt}}
+
+### 11. 인기 항목
+GET {{baseUrl}}/api/feed/popular?days=7&limit=10
+Authorization: Bearer {{jwt}}
+
+### 12. 유저의 리뷰 (F14: 4.5점 이상 곡)
+GET {{baseUrl}}/api/users/{{myId}}/reviews?type=TRACK&minRating=4.5
+Authorization: Bearer {{jwt}}
+
+### 13. 내 리뷰 일괄 조회
+GET {{baseUrl}}/api/reviews/mine?type=TRACK&spotifyIds=4uLU6hMCjMI75M1A2tKUQC,11dFghVXANMlKmJXsNCbNl
+Authorization: Bearer {{jwt}}
+
+### 14. 큐레이터 랭킹
+GET {{baseUrl}}/api/curators/ranking?minReviews=1&limit=20
+Authorization: Bearer {{jwt}}
