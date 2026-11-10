@@ -10,7 +10,7 @@ Spotify의 곡·앨범·플레이리스트에 별점과 리뷰를 남기는 앱 
 | DB | MySQL 8.4 (기본 실행·테스트는 H2 메모리 DB) |
 | 빌드 | Gradle (wrapper 포함) |
 | 인증 | 이메일 + 비밀번호(BCrypt) → 서버 JWT(HS256, 7일) |
-| 테스트 | MockMvc 통합 테스트 46개 (`./gradlew test`) |
+| 테스트 | MockMvc 통합 테스트 60개 (`./gradlew test`) |
 
 ## 문서
 
@@ -68,6 +68,7 @@ com.musicreview.server
 ### 2) mysql 프로필 (로컬 MySQL)
 
 처음 한 번 DB를 만듭니다. (예전 v1 스키마로 만든 DB가 있으면 `docs/schema.sql` 맨 위 안내대로 지우고 다시 만드세요.)
+v2 DB에 v0.4 컬럼을 추가할 때는 서버를 켜면 자동으로 추가되고, 안 되면 `docs/migrations/V3__review_highlights_and_spotify_link.sql`을 실행합니다.
 
 ```powershell
 # PowerShell (프로젝트 폴더에서 실행)
@@ -133,6 +134,7 @@ IntelliJ에서는 **Run → Edit Configurations → Environment variables**에 �
 | 7 | Spotify 대리 조회: 검색, 곡·앨범·아티스트 앨범·플리 | ✅ |
 | 8 | 권장: 피드, 인기 항목, 유저 리뷰·통계 | ✅ |
 | 9 | 추가: 큐레이터 랭킹 | ✅ |
+| 9-1 | 앱 요청(v0.4): 리뷰 하이라이트, 곡별 평점 일괄 조회, Spotify 연동, 베스트 큐레이터 개편·프로필, 이번 주의 플리 | ✅ |
 | 10 | 배포, CI(GitHub Actions) | ⬜ |
 
 ## 참고

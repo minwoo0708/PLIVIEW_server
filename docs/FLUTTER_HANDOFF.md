@@ -5,6 +5,14 @@
 
 ---
 
+> **2026-11-10 추가 (서버 v0.4)**: 앱에서 요청한 서버 기능이 구현됐습니다. 상세는 `docs/API.md` 23~28번과 12·14·21·22번 변경 부분을 보세요.
+> - 앨범·플리 리뷰 하이라이트: `bestTrack`, `worstTrack`, `underratedTrack`(앨범만), `bestMoment`, `body`(여러 줄) → 응답 `highlights`
+> - 수록곡 곡별 평점: `GET /api/items/tracks/ratings?spotifyIds=a,b,c` (최대 100개, `myRating` 포함)
+> - Spotify 계정 연동: `PUT /api/users/me/spotify {spotifyAccessToken}` / `DELETE /api/users/me/spotify`, `UserResponse.spotify`로 연동 여부 확인
+> - 베스트 큐레이터: Spotify 연동한 사용자만, 응답에 `userId`·`nickname` 추가 → `GET /api/curators/{userId}`, `GET /api/curators/{userId}/playlists`(인기순)
+> - 이번 주의 플리: `GET /api/feed/weekly-playlists` (기본 리뷰 50개 이상, 평균 높은 순)
+> - 별 5점 모아 보기: `GET /api/users/{id}/reviews?type=TRACK|ALBUM|PLAYLIST&minRating=5.0`
+
 ## 0. 한눈에 보기
 
 | 항목 | 내용 |
