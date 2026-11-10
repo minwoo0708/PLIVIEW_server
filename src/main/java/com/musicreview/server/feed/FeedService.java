@@ -6,9 +6,11 @@ import com.musicreview.server.global.common.PageResponse;
 import com.musicreview.server.global.common.TimeUtils;
 import com.musicreview.server.review.domain.ItemType;
 import com.musicreview.server.review.domain.PopularItemRow;
+import com.musicreview.server.review.domain.Review;
 import com.musicreview.server.review.domain.ReviewRepository;
 import com.musicreview.server.review.dto.ReviewResponse;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
@@ -34,17 +36,21 @@ public class FeedService {
         ItemType itemType = type == null ? null : ItemType.from(type);
         PageRequest pageable = PageRequest.of(page, size,
                 Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")));
-        return PageResponse.of(reviewRepository.findFeed(itemType, pageable),
-                review -> ReviewResponse.of(review, userId));
+        Page<Review> reviews = itemType == null
+                ? reviewRepository.findFeed(pageable)
+                : reviewRepository.findByType(itemType, pageable);
+        return PageResponse.of(reviews, review -> ReviewResponse.of(review, userId));
     }
 
     /** 최근 days일 동안 리뷰가 많이 달린 항목 */
     public List<PopularItemResponse> getPopular(String type, int days, int limit) {
         ItemType itemType = type == null ? null : ItemType.from(type);
         LocalDateTime since = TimeUtils.now().toLocalDateTime().minusDays(days);
-        List<PopularItemRow> rows = reviewRepository.findPopularItems(itemType, since, PageRequest.of(0, limit));
-        // 항목 수가 최대 50개라 항목마다 최근 리뷰 1건을 조회해 표시용 정보를 채움
-        return rows.stream().map(popularItemMapper::toResponse).toList();
+        PageRequest top = PageRequest.of(0, limit);
+        List<PopularItemRow> rows = itemType == null
+                ? reviewRepository.findPopularItems(since, top)
+                : reviewRepository.findPopularItemsByType(itemType, since, top);
+        return popularItemMapper.toResponses(rows);
     }
 
     /**
@@ -54,9 +60,10 @@ public class FeedService {
     public List<WeeklyPlaylistResponse> getWeeklyPlaylists(int minReviews, Integer days, int limit) {
         LocalDateTime since = days == null ? ALL_TIME : TimeUtils.now().toLocalDateTime().minusDays(days);
         List<PopularItemRow> rows = reviewRepository.findTopRatedPlaylists(since, minReviews, PageRequest.of(0, limit));
-        List<WeeklyPlaylistResponse> result = new ArrayList<>(rows.size());
-        for (int i = 0; i < rows.size(); i++) {
-            PopularItemResponse item = popularItemMapper.toResponse(rows.get(i));
+        List<PopularItemResponse> items = popularItemMapper.toResponses(rows);
+        List<WeeklyPlaylistResponse> result = new ArrayList<>(items.size());
+        for (int i = 0; i < items.size(); i++) {
+            PopularItemResponse item = items.get(i);
             result.add(new WeeklyPlaylistResponse(i + 1, item.spotifyId(), item.item(),
                     item.reviewCount(), item.averageRating()));
         }

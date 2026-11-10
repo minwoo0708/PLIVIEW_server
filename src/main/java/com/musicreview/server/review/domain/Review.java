@@ -37,6 +37,7 @@ import java.util.Set;
         indexes = {
                 @Index(name = "idx_reviews_item", columnList = "type, spotify_id, created_at"),
                 @Index(name = "idx_reviews_created", columnList = "created_at"),
+                @Index(name = "idx_reviews_type_created", columnList = "type, created_at"),
                 @Index(name = "idx_reviews_user_created", columnList = "user_id, created_at"),
                 @Index(name = "idx_reviews_owner", columnList = "owner_spotify_id")
         })
