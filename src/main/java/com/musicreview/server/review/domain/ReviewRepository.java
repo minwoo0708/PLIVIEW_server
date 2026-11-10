@@ -49,6 +49,16 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
             """)
     List<Object[]> countByRating(@Param("type") ItemType type, @Param("spotifyId") String spotifyId);
 
+    /** 여러 항목의 리뷰 수·평균: [spotifyId, count, avg] (리뷰가 있는 것만) */
+    @Query("""
+            select r.spotifyId, count(r), avg(r.rating)
+            from Review r
+            where r.type = :type and r.spotifyId in :spotifyIds
+            group by r.spotifyId
+            """)
+    List<Object[]> findRatingsBySpotifyIds(@Param("type") ItemType type,
+                                           @Param("spotifyIds") Collection<String> spotifyIds);
+
     // ===== 피드 =====
 
     /** 최신 리뷰 피드. type이 null이면 전체 */
@@ -104,19 +114,63 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     // ===== 큐레이터 랭킹 =====
 
-    /** 플리 주인별 집계. 받은 리뷰가 minReviews 이상인 주인만, 평균 총점 내림차순 */
+    /**
+     * 큐레이터 = Spotify를 연동한 PLIVIEW 사용자. 그 사람 Spotify 계정이 주인인 플리에 달린 리뷰로 집계.
+     * 받은 리뷰가 minReviews 이상인 사람만, 평균 총점 내림차순
+     */
     @Query("""
             select new com.musicreview.server.review.domain.CuratorRow(
-                r.ownerSpotifyId, count(distinct r.spotifyId), count(r),
+                u.id, r.ownerSpotifyId, count(distinct r.spotifyId), count(r),
                 avg(r.rating), avg(r.conceptScore), avg(r.flowScore), avg(r.discoveryScore))
             from Review r
+            join com.musicreview.server.user.domain.User u on u.spotifyUserId = r.ownerSpotifyId
             where r.type = com.musicreview.server.review.domain.ItemType.PLAYLIST
-            group by r.ownerSpotifyId
+            group by u.id, r.ownerSpotifyId
             having count(r) >= :minReviews
-            order by avg(r.rating) desc, count(r) desc, r.ownerSpotifyId asc
+            order by avg(r.rating) desc, count(r) desc, u.id asc
             """)
     List<CuratorRow> findCuratorRanking(@Param("minReviews") long minReviews, Pageable pageable);
 
-    /** 주인의 가장 최근 플리 리뷰 (주인 표시 이름용) */
-    Optional<Review> findFirstByTypeAndOwnerSpotifyIdOrderByCreatedAtDescIdDesc(ItemType type, String ownerSpotifyId);
+    /** 한 큐레이터(Spotify 계정)의 플리 집계. 리뷰가 없으면 count 0 */
+    @Query("""
+            select count(distinct r.spotifyId), count(r),
+                   avg(r.rating), avg(r.conceptScore), avg(r.flowScore), avg(r.discoveryScore)
+            from Review r
+            where r.type = com.musicreview.server.review.domain.ItemType.PLAYLIST
+              and r.ownerSpotifyId = :ownerSpotifyId
+            """)
+    List<Object[]> findCuratorTotals(@Param("ownerSpotifyId") String ownerSpotifyId);
+
+    /** 한 큐레이터의 플리를 인기순(리뷰 수 → 평균 총점)으로 */
+    @Query(value = """
+            select new com.musicreview.server.review.domain.PopularItemRow(
+                r.type, r.spotifyId, count(r), avg(r.rating))
+            from Review r
+            where r.type = com.musicreview.server.review.domain.ItemType.PLAYLIST
+              and r.ownerSpotifyId = :ownerSpotifyId
+            group by r.type, r.spotifyId
+            order by count(r) desc, avg(r.rating) desc, r.spotifyId asc
+            """,
+            countQuery = """
+            select count(distinct r.spotifyId) from Review r
+            where r.type = com.musicreview.server.review.domain.ItemType.PLAYLIST
+              and r.ownerSpotifyId = :ownerSpotifyId
+            """)
+    Page<PopularItemRow> findCuratorPlaylists(@Param("ownerSpotifyId") String ownerSpotifyId, Pageable pageable);
+
+    // ===== 이번 주의 플리 =====
+
+    /** 리뷰가 minReviews 이상인 플리를 평균 총점 내림차순으로 (since 이후 작성된 리뷰 기준) */
+    @Query("""
+            select new com.musicreview.server.review.domain.PopularItemRow(
+                r.type, r.spotifyId, count(r), avg(r.rating))
+            from Review r
+            where r.type = com.musicreview.server.review.domain.ItemType.PLAYLIST
+              and r.createdAt >= :since
+            group by r.type, r.spotifyId
+            having count(r) >= :minReviews
+            order by avg(r.rating) desc, count(r) desc, r.spotifyId asc
+            """)
+    List<PopularItemRow> findTopRatedPlaylists(@Param("since") LocalDateTime since,
+                                               @Param("minReviews") long minReviews, Pageable pageable);
 }
