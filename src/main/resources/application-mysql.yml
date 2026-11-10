@@ -4,8 +4,15 @@ spring:
     url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:music_review}?serverTimezone=Asia/Seoul&characterEncoding=UTF-8
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD}
+  flyway:
+    # 스키마는 src/main/resources/db/migration 의 V1, V2, ... 순서대로 적용
+    enabled: true
+    # Flyway 도입 전에 만든 DB(테이블은 있는데 이력 표가 없음)는 이 버전까지 이미 적용된 것으로 보고 시작.
+    # 빈 DB에는 영향 없음(V1부터 전부 실행). 기존 DB가 V1 상태(v0.4 컬럼 없음)라면 FLYWAY_BASELINE_VERSION=1
+    baseline-on-migrate: true
+    baseline-version: ${FLYWAY_BASELINE_VERSION:2}
   jpa:
     hibernate:
-      # 스키마는 docs/schema.sql 기준. 개발 중에는 update, 안정되면 validate로 변경
-      ddl-auto: update
+      # 스키마 변경은 Flyway만 함. Hibernate는 엔티티와 테이블이 맞는지 검사만
+      ddl-auto: validate
     show-sql: false
