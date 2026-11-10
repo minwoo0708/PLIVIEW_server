@@ -1,4 +1,5 @@
--- PLIVIEW MySQL 8.4 스키마 v2 (docs/API.md 기준, 이메일 로그인)
+-- PLIVIEW MySQL 8.4 스키마 v3 (docs/API.md 기준, 이메일 로그인 + Spotify 연동 + 리뷰 하이라이트)
+-- v2로 만든 DB를 v3로 올리려면 docs/migrations/V3__review_highlights_and_spotify_link.sql
 -- 실행 (PowerShell): mysql -u root -p -e "source docs/schema.sql"
 -- 실행 (cmd/bash):   mysql -u root -p < docs/schema.sql
 --
@@ -17,10 +18,13 @@ CREATE TABLE IF NOT EXISTS users (
     password_hash     VARCHAR(100) NOT NULL,              -- BCrypt
     nickname          VARCHAR(20)  NOT NULL,
     profile_image_url VARCHAR(500) NULL,
+    spotify_user_id      VARCHAR(64)  NULL,               -- 연동한 Spotify 계정 id (플리 owner.id)
+    spotify_display_name VARCHAR(100) NULL,
     created_at        DATETIME(6)  NOT NULL,
     updated_at        DATETIME(6)  NOT NULL,
     PRIMARY KEY (id),
-    CONSTRAINT uk_users_email UNIQUE (email)
+    CONSTRAINT uk_users_email UNIQUE (email),
+    CONSTRAINT uk_users_spotify_user_id UNIQUE (spotify_user_id)
 ) ENGINE = InnoDB;
 
 CREATE TABLE IF NOT EXISTS reviews (
@@ -43,6 +47,16 @@ CREATE TABLE IF NOT EXISTS reviews (
     discovery_score  DECIMAL(2, 1) NULL,
     snapshot_id      VARCHAR(100)  NULL,
     owner_spotify_id VARCHAR(64)   NULL,
+
+    -- 앨범·플리 하이라이트 (곡은 NULL, 과소평가된 곡은 앨범만)
+    best_track_id         VARCHAR(64)   NULL,
+    best_track_name       VARCHAR(200)  NULL,
+    worst_track_id        VARCHAR(64)   NULL,
+    worst_track_name      VARCHAR(200)  NULL,
+    underrated_track_id   VARCHAR(64)   NULL,
+    underrated_track_name VARCHAR(200)  NULL,
+    best_moment           VARCHAR(100)  NULL,
+    body                  VARCHAR(2000) NULL,             -- 전체 평가 (여러 줄)
 
     created_at       DATETIME(6)   NOT NULL,
     updated_at       DATETIME(6)   NOT NULL,
