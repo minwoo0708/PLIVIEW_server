@@ -80,6 +80,7 @@ class SpotifyApiTest extends ApiTestSupport {
                         "{\"id\":\"realpl\",\"name\":\"진짜 플리\",\"snapshot_id\":\"SNAP-REAL\","
                                 + "\"owner\":{\"id\":\"real_owner\",\"display_name\":\"진짜 주인\"},\"images\":[{\"url\":\"https://i.scdn.co/pl.jpg\"}]}");
                 case "/v1/playlists/ghostpl" -> respond(exchange, 404, "{}");
+                case "/v1/playlists/brokenpl" -> respond(exchange, 500, "{}");
                 // 앱 토큰으로는 허용되지 않는 엔드포인트 (Spotify가 401을 줌)
                 case "/v1/tracks/appdenied" -> respond(exchange, 401, "{\"error\":{\"status\":401,\"message\":\"Permissions missing\"}}");
                 default -> respond(exchange, 200, "{\"id\":\"" + path.substring(path.lastIndexOf('/') + 1) + "\"}");
@@ -240,6 +241,25 @@ class SpotifyApiTest extends ApiTestSupport {
                 """)
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("SPOTIFY_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("Spotify가 켜져 있는데 플리 주인을 확인하지 못하면(장애) 앱이 보낸 주인 id를 믿지 않고 502, 곡은 기존대로 저장")
+    void playlistOwnerNotTrustedWhenUnverifiable() throws Exception {
+        postJson("/api/reviews", token, """
+                {"type":"PLAYLIST","spotifyId":"brokenpl","item":{"name":"x"},"rating":4.0,
+                 "conceptScore":4,"flowScore":4,"discoveryScore":4,"ownerSpotifyId":"fake_owner"}
+                """)
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("SPOTIFY_UNAVAILABLE"));
+        getJson("/api/items/PLAYLIST/brokenpl/reviews", token)
+                .andExpect(jsonPath("$.totalElements").value(0));
+
+        postJson("/api/reviews", token, """
+                {"type":"TRACK","spotifyId":"broken","item":{"name":"앱이 보낸 이름"},"rating":4.0}
+                """)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.item.name").value("앱이 보낸 이름"));
     }
 
     @Test

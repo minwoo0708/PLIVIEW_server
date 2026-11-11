@@ -52,6 +52,11 @@ public class ReviewService {
 
         // Spotify에서 진짜 정보를 확인할 수 있으면 그 값을 쓰고, 안 되면 앱이 보낸 값을 씀
         Optional<SpotifyItemLookup.SpotifyItem> verified = itemLookup.lookup(request.type(), request.spotifyId());
+        // 플리 주인 id는 큐레이터 랭킹에 쓰이므로, Spotify가 켜져 있는데 확인하지 못하면
+        // 앱이 보낸 값을 믿지 않고 거절한다 (랭킹 조작 방지)
+        if (request.type() == ItemType.PLAYLIST && verified.isEmpty() && itemLookup.isEnabled()) {
+            throw new BusinessException(ErrorCode.SPOTIFY_UNAVAILABLE);
+        }
         return transactionTemplate.execute(status -> save(userId, request, verified));
     }
 

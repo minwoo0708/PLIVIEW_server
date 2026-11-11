@@ -36,6 +36,11 @@ public class SpotifyItemLookup {
     private final SpotifyProperties properties;
     private final JsonMapper jsonMapper;
 
+    /** Spotify 설정이 켜져 있는지 (꺼져 있으면 로컬 개발·테스트 모드) */
+    public boolean isEnabled() {
+        return properties.isConfigured();
+    }
+
     public Optional<SpotifyItem> lookup(ItemType type, String spotifyId) {
         if (!properties.isConfigured()) {
             return Optional.empty();
