@@ -154,8 +154,10 @@ public class SpotifyClient {
             log.error("Spotify가 400을 돌려줌 (서버 요청 확인 필요): {} {} → {}", uri.getPath(), uri.getQuery(), body);
             return new BusinessException(ErrorCode.SPOTIFY_UNAVAILABLE);
         }
-        if (status == 403) {
-            log.warn("Spotify 접근 거부: {} → {}", uri.getPath(), body);
+        if (status == 403 || status == 401) {
+            // 401은 앱 토큰을 새로 받아 다시 시도한 뒤에도 남은 경우: 토큰 문제가 아니라
+            // 이 엔드포인트가 앱 토큰(사용자 없는 접근)을 허용하지 않는 것 (개발 모드 제한 등)
+            log.warn("Spotify 접근 거부({}): {} → {}", status, uri.getPath(), body);
             return new BusinessException(ErrorCode.SPOTIFY_FORBIDDEN);
         }
         if (status == 429) {
