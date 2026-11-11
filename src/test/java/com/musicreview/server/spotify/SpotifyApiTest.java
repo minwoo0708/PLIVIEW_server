@@ -80,10 +80,8 @@ class SpotifyApiTest extends ApiTestSupport {
                         "{\"id\":\"realpl\",\"name\":\"진짜 플리\",\"snapshot_id\":\"SNAP-REAL\","
                                 + "\"owner\":{\"id\":\"real_owner\",\"display_name\":\"진짜 주인\"},\"images\":[{\"url\":\"https://i.scdn.co/pl.jpg\"}]}");
                 case "/v1/playlists/ghostpl" -> respond(exchange, 404, "{}");
-                // 플리 수록곡: 새 경로(/items)가 있는 플리와 예전 경로(/tracks)만 있는 플리
-                case "/v1/playlists/newpl/items" -> respond(exchange, 200, "{\"items\":[{\"item\":{\"id\":\"n1\"}}],\"total\":1,\"next\":null}");
-                case "/v1/playlists/oldpl/items" -> respond(exchange, 404, "{}");
-                case "/v1/playlists/oldpl/tracks" -> respond(exchange, 200, "{\"items\":[{\"track\":{\"id\":\"o1\"}}],\"total\":1,\"next\":null}");
+                // 앱 토큰으로는 허용되지 않는 엔드포인트 (Spotify가 401을 줌)
+                case "/v1/tracks/appdenied" -> respond(exchange, 401, "{\"error\":{\"status\":401,\"message\":\"Permissions missing\"}}");
                 default -> respond(exchange, 200, "{\"id\":\"" + path.substring(path.lastIndexOf('/') + 1) + "\"}");
             }
         });
@@ -198,16 +196,19 @@ class SpotifyApiTest extends ApiTestSupport {
     }
 
     @Test
-    @DisplayName("플리 수록곡: 새 경로(/items)를 먼저, 404면 예전 경로(/tracks)로")
-    void playlistTracks() throws Exception {
-        getJson("/api/spotify/playlists/newpl/tracks?limit=50&offset=0", token)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].item.id").value("n1"));
-        getJson("/api/spotify/playlists/oldpl/tracks", token)
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.items[0].track.id").value("o1"));
-        assertThat(API_REQUESTS.stream().filter(r -> r.startsWith("/v1/playlists/oldpl/")).map(r -> r.substring(0, r.indexOf('?'))).toList())
-                .containsExactly("/v1/playlists/oldpl/items", "/v1/playlists/oldpl/tracks");
+    @DisplayName("앱 토큰을 새로 받아도 Spotify가 계속 401이면 '연결 안 됨'(502)이 아니라 403 SPOTIFY_FORBIDDEN")
+    void persistentUnauthorizedIsForbidden() throws Exception {
+        getJson("/api/spotify/tracks/appdenied", token)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("SPOTIFY_FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("플리 수록곡 경로는 없음 (Spotify 개발 모드 정책으로 서버에서 제공 불가)")
+    void playlistTracksEndpointIsGone() throws Exception {
+        getJson("/api/spotify/playlists/realpl/tracks", token)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
     }
 
     @Test
