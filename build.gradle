@@ -46,3 +46,8 @@ dependencies {
 tasks.named('test') {
 	useJUnitPlatform()
 }
+
+// Docker 이미지에서 실행 가능한 jar 하나만 만들도록 plain jar는 만들지 않음
+tasks.named("jar") {
+	enabled = false
+}
