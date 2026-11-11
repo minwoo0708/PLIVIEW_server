@@ -26,7 +26,7 @@ Spotify의 곡 · 앨범 · 플레이리스트에 별점과 리뷰를 남기는 
 <p align="center"><sub>앱 화면 디자인 · 시작, 홈, 탐색, 재생 기록, 프로필, 앨범·플리 상세, 평가하기, 큐레이터 랭킹, 로그인·가입, 설정</sub></p>
 
 > 곡도 앨범도 플레이리스트도 **내 기준으로 기록**해요. 음악 정보는 Spotify에서 가져오고,
-> 회원·리뷰·통계는 이 서버가 맡습니다. 클라이언트는 **Flutter 하나로 만든 안드로이드 앱과 웹**이에요.
+> 회원·리뷰·통계는 이 서버가 맡습니다. 클라이언트는 **Flutter로 만든 안드로이드 앱**이에요(웹은 디자인이 없어 보류 중).
 
 
 ## ✨ 주요 기능
@@ -47,12 +47,12 @@ Spotify의 곡 · 앨범 · 플레이리스트에 별점과 리뷰를 남기는 
 
 ```mermaid
 flowchart LR
-    App["Flutter 앱<br/>Android · Web"] -- "Bearer JWT" --> API["Spring Boot<br/>REST API · 인증 · 검증"]
+    App["Flutter 앱<br/>Android"] -- "Bearer JWT" --> API["Spring Boot<br/>REST API · 인증 · 검증"]
     API --> DB[("MySQL 8.4<br/>Flyway")]
     API -- "앱 토큰으로 대리 조회<br/>캐시 · 요청 제한" --> SP["Spotify<br/>Web API"]
 ```
 
-음악 정보는 서버가 **자기 Spotify 앱 자격 증명(Client Credentials)** 으로 대신 가져와서, 웹 앱에 Client Secret을 둘 필요가 없어요.
+음악 정보는 서버가 **자기 Spotify 앱 자격 증명(Client Credentials)** 으로 대신 가져와서, 앱에 Client Secret을 둘 필요가 없어요.
 사용자 본인의 Spotify 권한이 필요한 기능(최근 재생)만 앱이 **PKCE**로 Spotify에 직접 요청합니다.
 
 ### 리뷰를 쓰면 일어나는 일
@@ -176,7 +176,7 @@ erDiagram
 - 세션 없이 **JWT(HS256, 7일)** 로 인증하고 비밀번호는 **BCrypt**로만 저장합니다. 응답에 비밀번호가 나오지 않아요.
 - 필터 단계의 401·403도 서버 공통 에러 형식으로 응답해, 앱이 에러를 한 가지 방식으로 처리할 수 있어요.
 - 로그인 실패는 "이메일이 없는지 / 비밀번호가 틀렸는지"를 알려 주지 않습니다.
-- Flutter 웹이 다른 포트에서 부를 수 있게 CORS를 설정했고, 배포 주소는 환경변수로 추가합니다.
+- 웹 클라이언트가 다른 포트에서 부를 수 있게 CORS를 설정해 두었고(웹 앱은 보류 중), 배포 주소는 환경변수로 추가합니다.
 
 **✅ 입력 검증 · 정합성**
 - 별점·닉네임·비밀번호·Spotify id는 **커스텀 검증 어노테이션**(`@Score`, `@Nickname`, `@Password`, `@SpotifyId`)으로 한 곳에서 관리합니다.
@@ -248,7 +248,7 @@ Spotify 검색·정보 조회를 쓰려면 `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_
 | `JWT_SECRET` | local만 개발용 기본값 | 32바이트 이상, mysql 프로필에서는 **필수** |
 | `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | (없음) | [Spotify Dashboard](https://developer.spotify.com/dashboard)에서 발급 |
 | `SPOTIFY_RATE_LIMIT_PER_MINUTE` | `60` | 사용자 한 명이 1분에 보낼 수 있는 `/api/spotify/**` 요청 수 |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:*,http://127.0.0.1:*` | Flutter 웹 배포 주소를 쉼표로 추가 |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:*,http://127.0.0.1:*` | 웹 클라이언트 배포 주소를 쉼표로 추가 |
 | `FLYWAY_BASELINE_VERSION` | `2` | Flyway 도입 전에 만든 DB를 몇 번 마이그레이션까지 적용된 것으로 볼지 (빈 DB는 영향 없음) |
 
 - **스키마를 바꿀 때**는 엔티티를 고치고 새 마이그레이션(`V4__설명.sql`)을 추가합니다. 이미 적용된 `V1~V3`은 **수정하지 마세요**(체크섬 불일치로 서버 시작이 막혀요).
@@ -262,7 +262,7 @@ Spotify 검색·정보 조회를 쓰려면 `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_
 
 | 실행 환경 | Base URL |
 |---|---|
-| Flutter 웹 (Chrome) | `http://localhost:8080` (CORS 허용) |
+| Flutter 웹 (Chrome, 현재는 보류) | `http://localhost:8080` (CORS 허용) |
 | 안드로이드 에뮬레이터 | `http://10.0.2.2:8080` |
 | 실제 폰 (같은 Wi-Fi) | `http://<PC의 IP>:8080` |
 
