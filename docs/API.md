@@ -414,7 +414,7 @@
 
 **Spotify 확인 (v0.5)**: 서버가 `spotifyId`로 Spotify에서 **진짜 정보를 확인**해 저장합니다.
 - `item.name` / `subtitle` / `imageUrl`은 **Spotify에서 받은 값이 우선**이고, 앱이 보낸 값은 Spotify에 연결할 수 없을 때(설정 없음, 일시 장애, 호출 한도)만 대신 씁니다. 그래서 앱이 이름을 마음대로 보내도 그대로 저장되지 않아요.
-- 플리의 `ownerSpotifyId`도 Spotify의 `owner.id`로 저장됩니다(큐레이터 랭킹 조작 방지). 앱이 보낸 값은 Spotify 확인이 안 될 때만 씁니다. `snapshotId`를 안 보내면 Spotify의 현재 값을 저장합니다.
+- 플리의 `ownerSpotifyId`도 Spotify의 `owner.id`로 저장됩니다(큐레이터 랭킹 조작 방지). Spotify가 설정돼 있는데 확인하지 못하면(일시 장애·호출 한도) **플리 리뷰는 만들지 않고 `502 SPOTIFY_UNAVAILABLE`** 으로 거절합니다(곡·앨범은 앱이 보낸 표시 정보로 저장). 앱이 보낸 값은 Spotify 설정이 아예 없는 로컬 개발 환경에서만 씁니다. 앱은 이 502에서 "잠시 후 다시 시도"를 안내하면 됩니다. `snapshotId`를 안 보내면 Spotify의 현재 값을 저장합니다.
 - Spotify에 **없는 id**면 리뷰를 만들지 않고 `404 SPOTIFY_NOT_FOUND`.
 - 앱은 지금처럼 `item`을 보내면 됩니다(필수는 그대로).
 
