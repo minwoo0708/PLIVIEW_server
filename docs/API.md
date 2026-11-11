@@ -2,7 +2,7 @@
 
 > 서버: Spring Boot 4.1 / Java 21 / MySQL 8.4
 > 클라이언트: Flutter (안드로이드 앱 + 웹)
-> 버전: v0.5 (v0.4 + 플리 수록곡 API, 리뷰 `clear`, Spotify 확인 저장, 요청 제한·캐시)
+> 버전: v0.5 (v0.4 + 리뷰 `clear`, Spotify 확인 저장, 요청 제한·캐시. 플리 수록곡은 Spotify 정책으로 제공 불가)
 
 ---
 
@@ -136,11 +136,10 @@
 | 22 | GET | `/api/curators/ranking` | 베스트 큐레이터 (Spotify 연동한 사용자만) | ✅ | 추가 |
 | 23 | PUT | `/api/users/me/spotify` | Spotify 계정 연동 | ✅ | v0.4 |
 | 24 | DELETE | `/api/users/me/spotify` | Spotify 연동 해제 | ✅ | v0.4 |
-| 25 | GET | `/api/items/tracks/ratings` | 곡 여러 개의 평점 일괄 조회 (앨범·플리 수록곡 목록용) | ✅ | v0.4 |
+| 25 | GET | `/api/items/tracks/ratings` | 곡 여러 개의 평점 일괄 조회 (앨범 수록곡 목록용) | ✅ | v0.4 |
 | 26 | GET | `/api/feed/weekly-playlists` | 이번 주의 플리 (리뷰 많고 평점 높은 플리) | ✅ | v0.4 |
 | 27 | GET | `/api/curators/{userId}` | 큐레이터 프로필 | ✅ | v0.4 |
 | 28 | GET | `/api/curators/{userId}/playlists` | 큐레이터의 플리 목록 (인기순) | ✅ | v0.4 |
-| 29 | GET | `/api/spotify/playlists/{id}/tracks` | 플리 수록곡 (페이지) | ✅ | v0.5 |
 
 **앱이 Spotify를 직접 호출하는 기능**: 최근 재생곡, 내 Spotify 플리 목록, 플리 팔로우, 리뷰 기반 플리 생성은 사용자 본인의 Spotify 계정이 필요합니다. 앱이 PKCE로 Spotify에 직접 로그인해서 호출합니다. 그때 받은 토큰을 `PUT /api/users/me/spotify`로 한 번 보내면 서버가 계정을 확인해 **연동 상태로 저장**합니다(토큰은 저장하지 않음). 연동한 사용자만 베스트 큐레이터가 됩니다.
 
@@ -320,12 +319,12 @@
 | 8 | `GET /api/spotify/tracks/{id}` | | `GET /v1/tracks/{id}` (market=KR) |
 | 9 | `GET /api/spotify/albums/{id}` | | `GET /v1/albums/{id}` (market=KR) |
 | 10 | `GET /api/spotify/artists/{id}/albums` | `limit`(1~50, 기본 20), `offset`(기본 0) | `GET /v1/artists/{id}/albums` |
-| 11 | `GET /api/spotify/playlists/{id}` | | `GET /v1/playlists/{id}` (market=KR). **수록곡은 들어 있지 않음** (이름·주인·커버·`snapshot_id`·팔로워만) |
-| 29 | `GET /api/spotify/playlists/{id}/tracks` | `limit`(1~50, 기본 50), `offset`(기본 0) | 플리 수록곡 페이지. 새 경로 `/v1/playlists/{id}/items`를 먼저, 404면 예전 `/tracks`로 다시 시도 |
+| 11 | `GET /api/spotify/playlists/{id}` | | `GET /v1/playlists/{id}` (market=KR). **수록곡은 들어 있지 않음** (이름·주인·커버·`snapshot_id`·팔로워·`external_urls`만) |
 
 - `{id}`는 영문·숫자 1~64자만 허용합니다. 플리 공유 링크(`https://open.spotify.com/playlist/{id}?si=...`)에서 `{id}`를 꺼내는 건 앱이 합니다.
 - 비공개 플리나 Spotify 공식(에디토리얼) 플리는 `404 SPOTIFY_NOT_FOUND`가 나올 수 있습니다.
-- **플리 수록곡(29)**: Spotify가 플리 정보 응답에 곡 목록을 더 이상 넣어 주지 않아서 따로 호출합니다. 응답은 Spotify 페이지 JSON 그대로이고 `items[]` 안의 곡 객체 키가 **`item` 또는 `track`**일 수 있으니, 앱은 `entry.item ?? entry.track`로 읽고 null인 항목은 건너뛰세요. 다음 페이지는 `next`가 null이 아닐 때 `offset += limit`.
+- **플리 수록곡은 서버가 제공할 수 없습니다.** Spotify가 2026년 2월부터 개발 모드 앱에는 **사용자 본인이 만들었거나 함께 편집하는 플리**의 곡 목록만 주도록 바꿨고(`/v1/playlists/{id}/items`), 서버가 쓰는 앱 토큰(사용자 없는 접근)으로는 401을 돌려줍니다. 그래서 앱은 플리 상세에서 곡 목록 대신 **"Spotify에서 열기"** 버튼(`external_urls.spotify`를 `url_launcher`로 열기)을 보여 줍니다. 앨범은 `GET /api/spotify/albums/{id}`에 곡 목록이 그대로 들어 있어 영향이 없습니다. (한때 있던 `GET /api/spotify/playlists/{id}/tracks`는 이 이유로 제거했습니다.)
+- **플리 리뷰의 최고·워스트 곡**은 수록곡 목록이 없어서 목록에서 고를 수 없습니다. 선택 항목이므로 앱이 **곡 검색(7번)으로 고르게** 하거나 플리에서는 숨기면 됩니다. 서버는 그 곡이 실제로 플리에 들어 있는지는 확인하지 않습니다.
 - **캐시**: 같은 요청은 서버가 2분 동안 Spotify 응답을 재사용합니다(앱 토큰 하나를 모든 사용자가 같이 쓰므로 호출 수를 줄이려고). 그래서 Spotify에서 막 바뀐 내용이 최대 2분 늦게 보일 수 있어요.
 - **요청 제한**: `/api/spotify/**`는 사용자당 1분에 60회까지입니다. 넘으면 `429 TOO_MANY_REQUESTS`. 검색은 입력을 멈춘 뒤(디바운스) 호출하세요.
 
@@ -646,7 +645,7 @@
 **200 OK**: `UserResponse` (`spotify`에 연동 정보가 채워짐). 같은 계정으로 다시 보내도 성공합니다.
 **에러**: 400 `INVALID_INPUT`, 401 `SPOTIFY_TOKEN_INVALID` (토큰 만료·잘못됨, 또는 개발 모드에서 Dashboard 사용자 목록에 없는 계정. 메시지가 다름), 409 `SPOTIFY_ALREADY_LINKED`, 502 `SPOTIFY_UNAVAILABLE`
 
-> Spotify 개발 모드에서는 Dashboard → User Management에 등록한 계정(최대 25명)만 연동할 수 있습니다.
+> Spotify 개발 모드에서는 Dashboard → User Management에 등록한 계정만 연동할 수 있습니다. 2026년 2월 이후 만든 개발 모드 앱은 **최대 5명**(앱 소유자는 Premium)이라서, Spotify 연동과 베스트 큐레이터는 최대 5명까지만 쓸 수 있습니다. 검색·곡/앨범 정보·리뷰는 이 제한과 상관없습니다.
 
 ---
 
@@ -658,7 +657,7 @@
 ---
 
 ### 25. 곡별 평점 일괄 조회 — `GET /api/items/tracks/ratings`
-인증: ✅ · 앨범·플리 화면의 수록곡 목록에 곡마다 평점 표시
+인증: ✅ · 앨범 화면의 수록곡 목록에 곡마다 평점 표시 (플리는 수록곡 목록을 서버가 못 가져와서 해당 없음. 11번 참고)
 
 | 쿼리 | 필수 | 설명 |
 |---|---|---|
@@ -751,7 +750,7 @@
 
 | # | 내용 | 이유 |
 |---|---|---|
-| 1 | 회원가입·로그인을 Spotify 대신 **이메일 + 비밀번호**로 직접 구현 | Spotify 계정 없이도 가입 가능, 개발 모드 25명 제한을 피함 |
+| 1 | 회원가입·로그인을 Spotify 대신 **이메일 + 비밀번호**로 직접 구현 | Spotify 계정 없이도 가입 가능, 개발 모드 사용자 수 제한(5명)을 로그인에서 피함 |
 | 2 | 검색·곡/앨범/플리 정보는 **서버가 Client Credentials로 대신 호출** | 앱(특히 웹)에 Client Secret을 둘 수 없음 |
 | 3 | 최근 재생·내 플리·팔로우·플리 생성은 앱이 Spotify 연동(PKCE) 후 직접 호출 | 사용자 본인 Spotify 권한이 필요 |
 | 4 | `reviews`에 표시용 컬럼 `item_name`, `item_subtitle`, `item_image_url` | 피드·프로필·랭킹에서 Spotify 재호출 방지 |
