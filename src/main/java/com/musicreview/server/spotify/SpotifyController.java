@@ -87,36 +87,15 @@ public class SpotifyController {
         return json(spotifyClient.get("/artists/{id}/albums", Map.of("id", id), query));
     }
 
-    /** 플리 정보. Spotify가 이 응답에 수록곡을 더 이상 넣어 주지 않으므로 수록곡은 /tracks를 따로 호출 */
+    /**
+     * 플리 정보(이름, 주인, 커버, snapshot_id, 팔로워, external_urls).
+     * 수록곡은 들어 있지 않습니다: Spotify 개발 모드는 앱 토큰으로 플리 곡 목록을 주지 않아서(2026년 2월 정책)
+     * 서버에서 가져올 수 없고, 앱은 "Spotify에서 열기"(external_urls.spotify)로 보여 줍니다.
+     */
     @GetMapping("/playlists/{id}")
     public ResponseEntity<byte[]> playlist(@CurrentUserId Long userId, @PathVariable @SpotifyId String id) {
         rateLimiter.check(userId);
         return json(spotifyClient.get("/playlists/{id}", Map.of("id", id), withMarket()));
-    }
-
-    /**
-     * 플리 수록곡 (페이지). Spotify의 새 경로(/items)를 먼저 쓰고, 없으면 예전 경로(/tracks)로 다시 시도.
-     * 응답은 Spotify 페이지 JSON 그대로: { items: [ { track 또는 item: {...} } ], total, next, ... }
-     */
-    @GetMapping("/playlists/{id}/tracks")
-    public ResponseEntity<byte[]> playlistTracks(
-            @CurrentUserId Long userId,
-            @PathVariable @SpotifyId String id,
-            @RequestParam(defaultValue = "50") @Min(value = 1, message = "limit은 1~50입니다.")
-            @Max(value = 50, message = "limit은 1~50입니다.") int limit,
-            @RequestParam(defaultValue = "0") @Min(value = 0, message = "offset은 0 이상입니다.") int offset) {
-        rateLimiter.check(userId);
-        Map<String, String> query = withMarket();
-        query.put("limit", String.valueOf(limit));
-        query.put("offset", String.valueOf(offset));
-        try {
-            return json(spotifyClient.get("/playlists/{id}/items", Map.of("id", id), query));
-        } catch (BusinessException e) {
-            if (e.getErrorCode() != ErrorCode.SPOTIFY_NOT_FOUND) {
-                throw e;
-            }
-            return json(spotifyClient.get("/playlists/{id}/tracks", Map.of("id", id), query));
-        }
     }
 
     private Map<String, String> withMarket() {
