@@ -141,3 +141,73 @@ erDiagram
 | 빌드 · 테스트 | **Gradle** · JUnit 5 · MockMvc | 통합 테스트 68개 |
 | 협업 도구 | Postman · IntelliJ HTTP Client | 요청 모음 포함 |
 
+
+## 🔌 API 한눈에 보기
+
+모든 에러는 같은 JSON 형식(`status`, `code`, `message`, `errors`, `timestamp`)으로 응답하고, 목록은 같은 페이지 형식을 씁니다.
+요청·응답 예시와 에러 코드는 **[docs/API.md](docs/API.md)**에 있어요.
+
+<details>
+<summary><b>API 29개 전체 보기</b></summary>
+
+<br>
+
+| 영역 | 메서드 · 경로 | 설명 |
+|---|---|---|
+| 확인 | `GET /api/hello` | 서버 동작 확인 |
+| 계정 | `POST /api/auth/signup` | 회원가입 (가입 즉시 로그인) |
+| | `POST /api/auth/login` | 로그인 |
+| | `GET` `PATCH /api/users/me` | 내 정보 · 닉네임·프로필 사진 수정 |
+| | `PATCH /api/users/me/password` | 비밀번호 변경 |
+| | `DELETE /api/users/me` | 회원 탈퇴 (리뷰도 삭제) |
+| | `PUT` `DELETE /api/users/me/spotify` | Spotify 계정 연동 · 해제 |
+| Spotify | `GET /api/spotify/search` | 곡·앨범·아티스트·플리 검색 |
+| | `GET /api/spotify/tracks/{id}` | 곡 정보 |
+| | `GET /api/spotify/albums/{id}` | 앨범 정보 + 수록곡 |
+| | `GET /api/spotify/artists/{id}/albums` | 아티스트의 앨범 |
+| | `GET /api/spotify/playlists/{id}` | 플리 정보 |
+| 리뷰 | `POST /api/reviews` | 리뷰 작성 |
+| | `GET` `PATCH` `DELETE /api/reviews/{id}` | 조회 · 수정 · 삭제 |
+| | `GET /api/reviews/mine` | 여러 항목에 대한 내 리뷰 일괄 조회 |
+| 항목 | `GET /api/items/{type}/{id}/reviews` | 항목의 리뷰 목록 (정렬·페이지) |
+| | `GET /api/items/{type}/{id}/summary` | 평균 · 별점 분포 · 내 리뷰 |
+| | `GET /api/items/tracks/ratings` | 곡별 평점 일괄 조회 |
+| 홈 · 프로필 | `GET /api/feed` | 최신 리뷰 피드 |
+| | `GET /api/feed/popular` | 리뷰 많은 항목 |
+| | `GET /api/feed/weekly-playlists` | 이번 주의 플리 |
+| | `GET /api/users/{id}/reviews` | 유저의 리뷰 + 통계 |
+| 큐레이터 | `GET /api/curators/ranking` | 베스트 큐레이터 순위 |
+| | `GET /api/curators/{id}` | 큐레이터 프로필 |
+| | `GET /api/curators/{id}/playlists` | 큐레이터의 플리 (인기순) |
+
+</details>
+
+## 🧠 설계에서 신경 쓴 점
+
+**🔐 인증 · 보안**
+- 세션 없이 **JWT(HS256, 7일)** 로 인증하고 비밀번호는 **BCrypt**로만 저장합니다. 응답에 비밀번호가 나오지 않아요.
+- 필터 단계의 401·403도 서버 공통 에러 형식으로 응답해, 앱이 에러를 한 가지 방식으로 처리할 수 있어요.
+- 로그인 실패는 "이메일이 없는지 / 비밀번호가 틀렸는지"를 알려 주지 않습니다.
+- Flutter 웹이 다른 포트에서 부를 수 있게 CORS를 설정했고, 배포 주소는 환경변수로 추가합니다.
+
+**✅ 입력 검증 · 정합성**
+- 별점·닉네임·비밀번호·Spotify id는 **커스텀 검증 어노테이션**(`@Score`, `@Nickname`, `@Password`, `@SpotifyId`)으로 한 곳에서 관리합니다.
+- 곡에 플리 전용 항목을 보내거나, 플리에서 필수 항목이 빠지면 거절합니다.
+- "항목당 1인 1리뷰"는 UNIQUE 제약으로 보장하고, 동시에 두 번 요청해도 한 번만 저장됩니다.
+- 수정 요청의 `clear`로 선택 항목을 명시적으로 지울 수 있어서, "보내지 않음"과 "지움"이 헷갈리지 않아요.
+
+**🎧 Spotify 연동**
+- 앱 토큰은 만료 직전까지 재사용하고, 유효한 토큰이 있으면 **잠금 없이** 바로 돌려줍니다.
+- 같은 요청은 **2분 캐시**, 사용자당 **1분 60회 제한**으로, 모든 사용자가 토큰 하나를 같이 써도 한 명의 연타가 전체에 번지지 않게 했어요.
+- 쿼리를 엄격하게 인코딩해서 `C++` 같은 검색어도 정확히 전달하고, Spotify의 오류를 우리 에러 코드로 구분해 돌려줍니다.
+- **신뢰할 수 없는 입력 방어**: 리뷰를 저장할 때 서버가 Spotify에서 이름·커버·플리 주인을 다시 확인해, 앱이 보낸 값으로 큐레이터 랭킹을 조작하지 못하게 합니다.
+
+**⚡ 성능 · 운영**
+- 인기 항목과 큐레이터 목록의 표시 정보를 항목마다 조회하지 않고 **타입별로 묶어서** 한 번에 가져옵니다(N+1 제거).
+- 타입별 피드는 쿼리를 나누고 인덱스를 추가했어요.
+- 스키마는 **Flyway**로만 바꾸고, mysql 프로필의 Hibernate는 엔티티와 테이블이 맞는지 **검사만**(`validate`) 합니다.
+
+**🧪 테스트**
+- 실제 HTTP 요청처럼 호출하는 **MockMvc 통합 테스트 68개**. 인증, 검증, 권한, 집계, 페이지, 에러 형식을 확인합니다.
+- Spotify는 테스트 안에서 띄운 **가짜 HTTP 서버**로 대신해서, 토큰 캐시 · 응답 캐시 · 쿼리 인코딩 · 오류 변환을 외부 의존 없이 검증합니다.
+
