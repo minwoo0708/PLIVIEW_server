@@ -18,6 +18,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -36,17 +37,30 @@ public class ReviewService {
     private final ReviewRepository reviewRepository;
     private final UserService userService;
     private final SpotifyItemLookup itemLookup;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
+    /**
+     * 트랜잭션 밖에서 Spotify를 먼저 조회하고, DB에 쓰는 부분만 트랜잭션으로 묶는다.
+     * (외부 HTTP 호출이 느려도 DB 연결을 붙잡고 있지 않게)
+     */
     public ReviewResponse create(Long userId, CreateReviewRequest request) {
         validateTypeSpecificFields(request);
-        User user = userService.getUser(userId);
+        userService.getUser(userId);
         if (reviewRepository.existsByUserIdAndTypeAndSpotifyId(userId, request.type(), request.spotifyId())) {
             throw new BusinessException(ErrorCode.REVIEW_ALREADY_EXISTS);
         }
 
         // Spotify에서 진짜 정보를 확인할 수 있으면 그 값을 쓰고, 안 되면 앱이 보낸 값을 씀
         Optional<SpotifyItemLookup.SpotifyItem> verified = itemLookup.lookup(request.type(), request.spotifyId());
+        return transactionTemplate.execute(status -> save(userId, request, verified));
+    }
+
+    private ReviewResponse save(Long userId, CreateReviewRequest request,
+                                Optional<SpotifyItemLookup.SpotifyItem> verified) {
+        User user = userService.getUser(userId);
+        if (reviewRepository.existsByUserIdAndTypeAndSpotifyId(userId, request.type(), request.spotifyId())) {
+            throw new BusinessException(ErrorCode.REVIEW_ALREADY_EXISTS);
+        }
 
         Review review = Review.create(user, request.type(), request.spotifyId());
         applyItem(review, request.item(), verified);
@@ -79,9 +93,17 @@ public class ReviewService {
         return ReviewResponse.of(getReview(reviewId), userId);
     }
 
-    @Transactional
     public ReviewResponse update(Long userId, Long reviewId, UpdateReviewRequest request) {
-        Review review = getOwnReview(userId, reviewId);
+        // 검증과 Spotify 조회는 트랜잭션 밖에서, 저장만 트랜잭션 안에서
+        Review current = getOwnReview(userId, reviewId);
+        validateUpdate(current, request);
+        Optional<SpotifyItemLookup.SpotifyItem> verified = request.item() == null
+                ? Optional.empty()
+                : itemLookup.lookup(current.getType(), current.getSpotifyId());
+        return transactionTemplate.execute(status -> applyUpdate(userId, reviewId, request, verified));
+    }
+
+    private void validateUpdate(Review review, UpdateReviewRequest request) {
         if (!review.isPlaylist() && request.hasPlaylistFields()) {
             throw new BusinessException(ErrorCode.INVALID_REVIEW_FIELDS,
                     "곡·앨범 리뷰에는 conceptScore, flowScore, discoveryScore, snapshotId를 보낼 수 없습니다.");
@@ -89,9 +111,13 @@ public class ReviewService {
         validateHighlights(review.getType(), request.hasHighlights(),
                 request.underratedTrack() != null || request.clearOrEmpty().contains("underratedTrack"));
         validateClear(request);
+    }
 
+    private ReviewResponse applyUpdate(Long userId, Long reviewId, UpdateReviewRequest request,
+                                       Optional<SpotifyItemLookup.SpotifyItem> verified) {
+        Review review = getOwnReview(userId, reviewId);
         if (request.item() != null) {
-            applyItem(review, request.item(), itemLookup.lookup(review.getType(), review.getSpotifyId()));
+            applyItem(review, request.item(), verified);
         }
         if (request.rating() != null) {
             review.changeRating(scale(request.rating()));
