@@ -312,3 +312,48 @@ postman/     Postman 컬렉션과 환경
 http/        IntelliJ HTTP Client 요청 모음
 ```
 
+
+## ⚠️ 알려진 제약
+
+Spotify가 2026년 2월부터 **개발 모드 앱**에 제한을 걸어서, 아래 두 가지는 이 프로젝트에서 구조적으로 풀 수 없습니다.
+
+| 제약 | 영향 | 대응 |
+|---|---|---|
+| 개발 모드 앱은 연동 가능한 사용자가 **최대 5명** | Spotify 연동과 베스트 큐레이터는 최대 5명까지 | 검색·곡/앨범 정보·리뷰는 연동 없이 누구나 사용 |
+| 플리 **수록곡은 본인이 만들었거나 함께 편집하는 플리만** API로 제공 | 서버(앱 토큰)로는 플리 곡 목록을 받을 수 없음 | 앱은 플리 상세에서 **"Spotify에서 열기"** 버튼으로 연결 |
+
+그 밖에 요청 제한은 **서버 한 대 기준**(메모리)이라, 서버를 여러 대로 늘리면 Redis 같은 공유 저장소로 바꿔야 해요.
+Spotify 콘텐츠를 보여 줄 때는 Spotify 로고와 원본 링크를 표시합니다(브랜딩 가이드라인).
+
+## 🗺 개발 현황
+
+| 단계 | 내용 | 상태 |
+|---|---|---|
+| 1 | 프로젝트 생성 · API 명세 · DB 스키마 | ✅ |
+| 2 | 공통 기반: 에러 응답 · 검증 · 시간 기록 · 페이지 응답 | ✅ |
+| 3 | 인증: 회원가입 · 로그인 · JWT · CORS | ✅ |
+| 4 | 회원: 내 정보 · 비밀번호 변경 · 탈퇴 | ✅ |
+| 5 | 리뷰 CRUD · 항목 요약(평균·분포) | ✅ |
+| 6 | Spotify 대리 조회 · 계정 연동 | ✅ |
+| 7 | 피드 · 인기 항목 · 이번 주의 플리 · 유저 통계 · 큐레이터 랭킹 | ✅ |
+| 8 | 앨범·플리 하이라이트 · 곡별 평점 | ✅ |
+| 9 | 안정화: Spotify 응답 캐시·요청 제한 · Flyway · N+1 제거 | ✅ |
+| 10 | CI(GitHub Actions) · 컨테이너화 · 클라우드 배포 | ⬜ 예정 |
+
+## 📚 문서
+
+| 문서 | 내용 |
+|---|---|
+| [docs/API.md](docs/API.md) | REST API 명세 (요청·응답 예시, 에러 코드, 설계 결정) |
+| [docs/schema.sql](docs/schema.sql) | 최종 DB 스키마 (참고용) |
+| [src/main/resources/db/migration](src/main/resources/db/migration) | Flyway 마이그레이션 |
+| [docs/FLUTTER_HANDOFF.md](docs/FLUTTER_HANDOFF.md) | Flutter 앱 개발용 인수인계서 (서버 연동, 디자인 토큰, 화면별 API) |
+| [postman/](postman/) · [http/api.http](http/api.http) | 요청 모음 |
+
+<div align="center">
+
+**PLIVIEW** · 개인 프로젝트 / 포트폴리오
+
+[📱 Flutter 앱](https://github.com/minwoo0708/PLIVIEW_app) · [🍃 서버](https://github.com/minwoo0708/PLIVIEW_server)
+
+</div>
