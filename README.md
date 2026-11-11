@@ -47,34 +47,22 @@ Spotify의 곡 · 앨범 · 플레이리스트에 별점과 리뷰를 남기는 
 
 ```mermaid
 flowchart LR
-    subgraph Client["📱 Flutter (Android · Web)"]
-        App["PLIVIEW 앱"]
-    end
-    subgraph Server["🍃 Spring Boot (이 저장소)"]
-        API["REST API<br/>JWT 인증 · 입력 검증"]
-        Proxy["Spotify 대리 조회<br/>응답 캐시 · 요청 제한"]
-    end
-    DB[("MySQL 8.4<br/>Flyway 마이그레이션")]
-    Spotify["🎧 Spotify Web API"]
-
-    App -- "Bearer JWT" --> API
-    API --> DB
-    API --> Proxy
-    Proxy -- "앱 토큰<br/>(Client Credentials)" --> Spotify
-    App -. "사용자 토큰(PKCE)<br/>최근 재생" .-> Spotify
+    App["Flutter 앱<br/>Android · Web"] -- "Bearer JWT" --> API["Spring Boot<br/>REST API · 인증 · 검증"]
+    API --> DB[("MySQL 8.4<br/>Flyway")]
+    API -- "앱 토큰으로 대리 조회<br/>캐시 · 요청 제한" --> SP["Spotify<br/>Web API"]
 ```
 
-음악 정보는 서버가 **자기 Spotify 앱 자격 증명**으로 대신 가져와서, 웹 앱에 Client Secret을 둘 필요가 없어요.
-사용자 본인의 Spotify 권한이 필요한 기능(최근 재생)만 앱이 PKCE로 Spotify에 직접 요청합니다.
+음악 정보는 서버가 **자기 Spotify 앱 자격 증명(Client Credentials)** 으로 대신 가져와서, 웹 앱에 Client Secret을 둘 필요가 없어요.
+사용자 본인의 Spotify 권한이 필요한 기능(최근 재생)만 앱이 **PKCE**로 Spotify에 직접 요청합니다.
 
 ### 리뷰를 쓰면 일어나는 일
 
 ```mermaid
 sequenceDiagram
-    participant App as 📱 앱
+    participant App as 앱
     participant API as Spring Boot
-    participant SP as 🎧 Spotify
-    participant DB as 🗄 MySQL
+    participant SP as Spotify
+    participant DB as MySQL
 
     App->>API: POST /api/reviews (JWT · 별점 · 점수 · 태그)
     API->>API: 입력 검증 (0.5 단위 · 타입별 필드 규칙)
