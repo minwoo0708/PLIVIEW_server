@@ -10,6 +10,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * PLIVIEW 계정 ↔ Spotify 계정 연동.
@@ -22,12 +23,17 @@ public class SpotifyLinkService {
     private final UserService userService;
     private final UserRepository userRepository;
     private final SpotifyClient spotifyClient;
+    private final TransactionTemplate transactionTemplate;
 
-    @Transactional
+    /** Spotify 호출은 트랜잭션 밖에서, DB 저장만 트랜잭션 안에서 */
     public UserResponse link(Long userId, String spotifyAccessToken) {
-        User user = userService.getUser(userId);
+        userService.getUser(userId);
         SpotifyClient.SpotifyUserProfile profile = spotifyClient.getCurrentUser(spotifyAccessToken.strip());
+        return transactionTemplate.execute(status -> saveLink(userId, profile));
+    }
 
+    private UserResponse saveLink(Long userId, SpotifyClient.SpotifyUserProfile profile) {
+        User user = userService.getUser(userId);
         userRepository.findBySpotifyUserId(profile.id())
                 .filter(other -> !other.getId().equals(userId))
                 .ifPresent(other -> {
