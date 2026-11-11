@@ -86,3 +86,58 @@ sequenceDiagram
     API-->>App: 201 Created + 리뷰
 ```
 
+
+## 🗄 데이터 모델
+
+```mermaid
+erDiagram
+    USERS ||--o{ REVIEWS : "작성"
+    REVIEWS ||--o{ REVIEW_TAGS : "태그"
+
+    USERS {
+        bigint id PK
+        varchar email UK
+        varchar password_hash "BCrypt"
+        varchar nickname
+        varchar spotify_user_id UK "연동한 Spotify 계정"
+    }
+    REVIEWS {
+        bigint id PK
+        bigint user_id FK
+        varchar type "TRACK, ALBUM, PLAYLIST"
+        varchar spotify_id
+        decimal rating "0.5 ~ 5.0"
+        varchar comment "한 줄 평"
+        decimal concept_score "플리 전용"
+        decimal flow_score "플리 전용"
+        decimal discovery_score "플리 전용"
+        varchar snapshot_id "플리 전용"
+        varchar owner_spotify_id "플리 주인"
+        varchar best_track_id "앨범·플리"
+        varchar best_moment "앨범·플리"
+        varchar body "전체 평가"
+    }
+    REVIEW_TAGS {
+        bigint review_id PK, FK
+        varchar tag PK
+    }
+```
+
+- `reviews`는 `(user_id, type, spotify_id)`가 **UNIQUE**라서 한 항목에 한 사람이 리뷰를 하나만 쓸 수 있어요.
+- 평균·별점 분포·랭킹은 별도 통계 테이블 없이 **SQL 집계**(`AVG`, `GROUP BY`)로 계산합니다.
+- 피드와 이름·이미지 표시용으로 리뷰에 항목 정보(`item_name`, `item_subtitle`, `item_image_url`)를 함께 저장해, 목록마다 Spotify를 다시 부르지 않아요.
+
+## 🧰 기술 스택
+
+| 영역 | 사용 기술 | 이유 |
+|---|---|---|
+| 언어 · 런타임 | **Java 21** (Temurin) | LTS, record로 DTO를 간결하게 |
+| 프레임워크 | **Spring Boot 4.1** (Web MVC, Data JPA, Validation) | REST API와 영속성 |
+| 인증 · 보안 | **Spring Security 7** · OAuth2 Resource Server(JWT, HS256) · BCrypt | 세션 없는 stateless 인증 |
+| DB | **MySQL 8.4** (개발·테스트는 H2) | 실제 DB로 확인, 테스트는 빠르게 |
+| 마이그레이션 | **Flyway** | 스키마 변경 이력을 파일로 관리 |
+| 캐시 | **Caffeine** | Spotify 응답 · 요청 제한 카운터 |
+| 외부 연동 | **Spotify Web API** (`RestClient`) | 검색 · 곡 · 앨범 · 플리 정보 |
+| 빌드 · 테스트 | **Gradle** · JUnit 5 · MockMvc | 통합 테스트 68개 |
+| 협업 도구 | Postman · IntelliJ HTTP Client | 요청 모음 포함 |
+
