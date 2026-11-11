@@ -61,26 +61,50 @@ public interface ReviewRepository extends JpaRepository<Review, Long> {
 
     // ===== 피드 =====
 
-    /** 최신 리뷰 피드. type이 null이면 전체 */
-    @EntityGraph(attributePaths = "user")
-    @Query(value = "select r from Review r where (:type is null or r.type = :type)",
-            countQuery = "select count(r) from Review r where (:type is null or r.type = :type)")
-    Page<Review> findFeed(@Param("type") ItemType type, Pageable pageable);
+    // "(:type is null or r.type = :type)" 형태는 인덱스를 타기 어려워서 전체용/타입별 쿼리를 나눔
 
-    /** 인기 항목: since 이후 작성된 리뷰 수 내림차순, 같으면 평균 별점 내림차순 */
+    /** 최신 리뷰 피드 (전체 타입) */
+    @EntityGraph(attributePaths = "user")
+    @Query(value = "select r from Review r", countQuery = "select count(r) from Review r")
+    Page<Review> findFeed(Pageable pageable);
+
+    /** 최신 리뷰 피드 (한 타입) — idx_reviews_type_created */
+    @EntityGraph(attributePaths = "user")
+    Page<Review> findByType(ItemType type, Pageable pageable);
+
+    /** 인기 항목 (전체 타입): since 이후 작성된 리뷰 수 내림차순, 같으면 평균 별점 내림차순 */
     @Query("""
             select new com.musicreview.server.review.domain.PopularItemRow(
                 r.type, r.spotifyId, count(r), avg(r.rating))
             from Review r
-            where r.createdAt >= :since and (:type is null or r.type = :type)
+            where r.createdAt >= :since
             group by r.type, r.spotifyId
             order by count(r) desc, avg(r.rating) desc, r.spotifyId asc
             """)
-    List<PopularItemRow> findPopularItems(@Param("type") ItemType type, @Param("since") LocalDateTime since,
-                                          Pageable pageable);
+    List<PopularItemRow> findPopularItems(@Param("since") LocalDateTime since, Pageable pageable);
 
-    /** 항목의 가장 최근 리뷰 (표시용 이름·이미지를 가져올 때) */
-    Optional<Review> findFirstByTypeAndSpotifyIdOrderByCreatedAtDescIdDesc(ItemType type, String spotifyId);
+    /** 인기 항목 (한 타입) */
+    @Query("""
+            select new com.musicreview.server.review.domain.PopularItemRow(
+                r.type, r.spotifyId, count(r), avg(r.rating))
+            from Review r
+            where r.type = :type and r.createdAt >= :since
+            group by r.type, r.spotifyId
+            order by count(r) desc, avg(r.rating) desc, r.spotifyId asc
+            """)
+    List<PopularItemRow> findPopularItemsByType(@Param("type") ItemType type, @Param("since") LocalDateTime since,
+                                                Pageable pageable);
+
+    /**
+     * 여러 항목 각각의 가장 최근 리뷰 1건씩 (표시용 이름·이미지). 항목마다 1번씩 조회하던 N+1을 한 번으로.
+     * id가 클수록 나중에 쓴 리뷰라서 max(id)로 최신을 고름
+     */
+    @Query("""
+            select r from Review r
+            where r.type = :type and r.spotifyId in :spotifyIds
+              and r.id = (select max(r2.id) from Review r2 where r2.type = r.type and r2.spotifyId = r.spotifyId)
+            """)
+    List<Review> findLatestPerItem(@Param("type") ItemType type, @Param("spotifyIds") Collection<String> spotifyIds);
 
     // ===== 유저 리뷰·통계 =====
 

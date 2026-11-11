@@ -1,10 +1,13 @@
--- PLIVIEW MySQL 8.4 스키마 v3 (docs/API.md 기준, 이메일 로그인 + Spotify 연동 + 리뷰 하이라이트)
--- v2로 만든 DB를 v3로 올리려면 docs/migrations/V3__review_highlights_and_spotify_link.sql
--- 실행 (PowerShell): mysql -u root -p -e "source docs/schema.sql"
--- 실행 (cmd/bash):   mysql -u root -p < docs/schema.sql
+-- PLIVIEW MySQL 8.4 최종 스키마 (참고용 스냅샷, docs/API.md v0.5 기준)
 --
--- v1(Spotify 로그인)으로 이미 만든 DB가 있다면, 데이터가 없을 때 아래 한 줄로 지우고 다시 실행:
---   DROP DATABASE music_review;
+-- ⚠ 이 파일로 DB를 직접 만들지 않아도 됩니다. 서버(mysql 프로필)가 켜질 때 Flyway가
+--   src/main/resources/db/migration 의 V1, V2, V3 ... 을 순서대로 적용해 테이블을 만듭니다.
+--   빈 DB만 있으면 돼요 (PowerShell):
+--     mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS music_review DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE utf8mb4_unicode_ci"
+--
+-- 이 파일을 실행해서 만든 DB(= 이미 최신 스키마)에 Flyway를 붙이려면
+--   서버 실행 설정에 FLYWAY_BASELINE_VERSION=3 을 넣으세요.
+-- 스키마를 바꿀 때는 이 파일이 아니라 새 마이그레이션(V4__...sql)을 추가하고, 이 파일은 최종 모양으로 맞춰 둡니다.
 
 CREATE DATABASE IF NOT EXISTS music_review
   DEFAULT CHARACTER SET utf8mb4
@@ -76,6 +79,7 @@ CREATE TABLE IF NOT EXISTS reviews (
 
     INDEX idx_reviews_item (type, spotify_id, created_at),   -- 항목 상세의 리뷰 목록, 평균
     INDEX idx_reviews_created (created_at),                  -- 피드 최신순, 인기 항목(최근 N일)
+    INDEX idx_reviews_type_created (type, created_at),       -- 타입별 최신 피드
     INDEX idx_reviews_user_created (user_id, created_at),    -- 유저 프로필
     INDEX idx_reviews_owner (owner_spotify_id)               -- 큐레이터 랭킹
 ) ENGINE = InnoDB;

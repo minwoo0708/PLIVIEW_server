@@ -426,6 +426,20 @@
           }
         },
         {
+          "name": "리뷰 수정 - clear로 하이라이트 지우기 (v0.5)",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 OK', () => pm.response.to.have.status(200));",
+            "pm.test('bestTrack 지워짐', () => pm.expect(pm.response.json().highlights.bestTrack).to.be.null);"
+          ] } }],
+          "request": {
+            "method": "PATCH",
+            "header": [],
+            "body": { "mode": "raw", "raw": "{\n  \"clear\": [\"bestTrack\", \"underratedTrack\"]\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/reviews/{{albumReviewId}}",
+            "description": "'앨범 리뷰 + 하이라이트'를 먼저 실행해서 albumReviewId를 저장해 두세요"
+          }
+        },
+        {
           "name": "곡별 평점 일괄 조회",
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('200 OK', () => pm.response.to.have.status(200));",

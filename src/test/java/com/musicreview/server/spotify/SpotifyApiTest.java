@@ -68,8 +68,20 @@ class SpotifyApiTest extends ApiTestSupport {
             switch (path) {
                 case "/v1/search" -> respond(exchange, 200, "{\"tracks\":{\"items\":[{\"id\":\"t1\",\"name\":\"검색결과\"}]}}");
                 case "/v1/tracks/missing" -> respond(exchange, 404, "{\"error\":{\"status\":404}}");
+                case "/v1/tracks/badid" -> respond(exchange, 400, "{\"error\":{\"status\":400,\"message\":\"Invalid base62 id\"}}");
+                case "/v1/tracks/badreq" -> respond(exchange, 400, "{\"error\":{\"status\":400,\"message\":\"Invalid market code\"}}");
                 case "/v1/tracks/limited" -> respond(exchange, 429, "{}");
                 case "/v1/tracks/broken" -> respond(exchange, 500, "{}");
+                // 리뷰 작성 시 서버가 진짜 정보를 확인하는 항목들
+                case "/v1/tracks/realtrack" -> respond(exchange, 200,
+                        "{\"id\":\"realtrack\",\"name\":\"진짜 곡 이름\",\"artists\":[{\"name\":\"가수A\"},{\"name\":\"가수B\"}],"
+                                + "\"album\":{\"images\":[{\"url\":\"https://i.scdn.co/real-track.jpg\"}]}}");
+                case "/v1/playlists/realpl" -> respond(exchange, 200,
+                        "{\"id\":\"realpl\",\"name\":\"진짜 플리\",\"snapshot_id\":\"SNAP-REAL\","
+                                + "\"owner\":{\"id\":\"real_owner\",\"display_name\":\"진짜 주인\"},\"images\":[{\"url\":\"https://i.scdn.co/pl.jpg\"}]}");
+                case "/v1/playlists/ghostpl" -> respond(exchange, 404, "{}");
+                // 앱 토큰으로는 허용되지 않는 엔드포인트 (Spotify가 401을 줌)
+                case "/v1/tracks/appdenied" -> respond(exchange, 401, "{\"error\":{\"status\":401,\"message\":\"Permissions missing\"}}");
                 default -> respond(exchange, 200, "{\"id\":\"" + path.substring(path.lastIndexOf('/') + 1) + "\"}");
             }
         });
@@ -83,6 +95,7 @@ class SpotifyApiTest extends ApiTestSupport {
         registry.add("app.spotify.client-secret", () -> "test-secret");
         registry.add("app.spotify.api-base-url", () -> base + "/v1");
         registry.add("app.spotify.token-url", () -> base + "/api/token");
+        registry.add("app.spotify.requests-per-minute-per-user", () -> "1000");
     }
 
     @AfterAll
@@ -160,6 +173,73 @@ class SpotifyApiTest extends ApiTestSupport {
         return mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get("/api/spotify/search")
                 .param("q", q).param("type", type).param("limit", limit)
                 .header("Authorization", "Bearer " + token));
+    }
+
+    @Test
+    @DisplayName("Spotify 400: 없는 id는 404, 그 밖의 400(요청 실수)은 502")
+    void badRequestTranslation() throws Exception {
+        getJson("/api/spotify/tracks/badid", token)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("SPOTIFY_NOT_FOUND"));
+        getJson("/api/spotify/tracks/badreq", token)
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.code").value("SPOTIFY_UNAVAILABLE"));
+    }
+
+    @Test
+    @DisplayName("같은 요청은 캐시돼서 Spotify를 다시 부르지 않음")
+    void responseCache() throws Exception {
+        getJson("/api/spotify/tracks/cached1", token).andExpect(status().isOk());
+        getJson("/api/spotify/tracks/cached1", token).andExpect(status().isOk());
+        getJson("/api/spotify/tracks/cached1", signupAndGetToken("다른이")).andExpect(status().isOk());
+        assertThat(API_REQUESTS.stream().filter(r -> r.startsWith("/v1/tracks/cached1")).count()).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("앱 토큰을 새로 받아도 Spotify가 계속 401이면 '연결 안 됨'(502)이 아니라 403 SPOTIFY_FORBIDDEN")
+    void persistentUnauthorizedIsForbidden() throws Exception {
+        getJson("/api/spotify/tracks/appdenied", token)
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("SPOTIFY_FORBIDDEN"));
+    }
+
+    @Test
+    @DisplayName("플리 수록곡 경로는 없음 (Spotify 개발 모드 정책으로 서버에서 제공 불가)")
+    void playlistTracksEndpointIsGone() throws Exception {
+        getJson("/api/spotify/playlists/realpl/tracks", token)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("리뷰 작성 시 표시 정보와 플리 주인은 Spotify에서 확인한 값으로 저장")
+    void reviewUsesVerifiedItemInfo() throws Exception {
+        postJson("/api/reviews", token, """
+                {"type":"TRACK","spotifyId":"realtrack","item":{"name":"내맘대로 이름","subtitle":"가짜 가수"},"rating":4.0}
+                """)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.item.name").value("진짜 곡 이름"))
+                .andExpect(jsonPath("$.item.subtitle").value("가수A, 가수B"))
+                .andExpect(jsonPath("$.item.imageUrl").value("https://i.scdn.co/real-track.jpg"));
+
+        // 앱이 주인 id를 속여도 Spotify의 owner.id가 저장됨 (큐레이터 랭킹 조작 방지)
+        postJson("/api/reviews", token, """
+                {"type":"PLAYLIST","spotifyId":"realpl","item":{"name":"x"},"rating":4.0,
+                 "conceptScore":4,"flowScore":4,"discoveryScore":4,"ownerSpotifyId":"fake_owner"}
+                """)
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.item.name").value("진짜 플리"))
+                .andExpect(jsonPath("$.item.subtitle").value("진짜 주인"))
+                .andExpect(jsonPath("$.playlistScores.ownerSpotifyId").value("real_owner"))
+                .andExpect(jsonPath("$.playlistScores.snapshotId").value("SNAP-REAL"));
+
+        // Spotify에 없는 항목은 리뷰를 만들지 않음
+        postJson("/api/reviews", token, """
+                {"type":"PLAYLIST","spotifyId":"ghostpl","item":{"name":"x"},"rating":4.0,
+                 "conceptScore":4,"flowScore":4,"discoveryScore":4,"ownerSpotifyId":"o"}
+                """)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("SPOTIFY_NOT_FOUND"));
     }
 
     @Test

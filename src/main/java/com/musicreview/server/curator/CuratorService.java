@@ -9,11 +9,13 @@ import com.musicreview.server.global.common.TimeUtils;
 import com.musicreview.server.global.exception.BusinessException;
 import com.musicreview.server.global.exception.ErrorCode;
 import com.musicreview.server.review.domain.CuratorRow;
+import com.musicreview.server.review.domain.PopularItemRow;
 import com.musicreview.server.review.domain.RatingMath;
 import com.musicreview.server.review.domain.ReviewRepository;
 import com.musicreview.server.user.domain.User;
 import com.musicreview.server.user.domain.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -96,9 +98,10 @@ public class CuratorService {
     /** 큐레이터의 플리를 인기순(리뷰 수 → 평균 총점)으로. PLIVIEW에서 리뷰가 달린 플리만 나옴 */
     public PageResponse<PopularItemResponse> getPlaylists(Long userId, int page, int size) {
         User user = getCurator(userId);
-        return PageResponse.of(
-                reviewRepository.findCuratorPlaylists(user.getSpotifyUserId(), PageRequest.of(page, size)),
-                popularItemMapper::toResponse);
+        Page<PopularItemRow> rows = reviewRepository.findCuratorPlaylists(user.getSpotifyUserId(), PageRequest.of(page, size));
+        List<PopularItemResponse> content = popularItemMapper.toResponses(rows.getContent());
+        return new PageResponse<>(content, rows.getNumber(), rows.getSize(), rows.getTotalElements(),
+                rows.getTotalPages(), rows.hasNext());
     }
 
     private User getCurator(Long userId) {

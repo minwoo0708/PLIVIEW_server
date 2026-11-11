@@ -105,6 +105,46 @@ class ReviewHighlightsApiTest extends ApiTestSupport {
     }
 
     @Test
+    @DisplayName("clear: 곡 하이라이트도 지울 수 있고, 값과 같이 보내거나 모르는 이름이면 400")
+    void clearFields() throws Exception {
+        Number id = read(postJson("/api/reviews", token, """
+                {"type":"ALBUM","spotifyId":"alb5","item":{"name":"앨범"},"rating":4.0,"comment":"한 줄",
+                 "bestTrack":{"spotifyId":"t1","name":"최고"},"worstTrack":{"spotifyId":"t2","name":"워스트"},
+                 "underratedTrack":{"spotifyId":"t3","name":"과소"},"bestMoment":"인트로","body":"본문"}
+                """).andExpect(status().isCreated()), "$.id");
+
+        patchJson("/api/reviews/" + id, token, """
+                {"clear":["bestTrack","underratedTrack","comment","body"]}
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.highlights.bestTrack").doesNotExist())
+                .andExpect(jsonPath("$.highlights.underratedTrack").doesNotExist())
+                .andExpect(jsonPath("$.highlights.worstTrack.name").value("워스트"))
+                .andExpect(jsonPath("$.highlights.bestMoment").value("인트로"))
+                .andExpect(jsonPath("$.highlights.body").doesNotExist())
+                .andExpect(jsonPath("$.comment").doesNotExist());
+
+        patchJson("/api/reviews/" + id, token, """
+                {"bestMoment":"새 순간","clear":["bestMoment"]}
+                """).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+        patchJson("/api/reviews/" + id, token, """
+                {"clear":["rating"]}
+                """).andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_INPUT"));
+    }
+
+    @Test
+    @DisplayName("곡 리뷰에서 하이라이트를 clear하면 400, comment clear는 가능")
+    void clearOnTrack() throws Exception {
+        Number id = read(postJson("/api/reviews", token, """
+                {"type":"TRACK","spotifyId":"t7","item":{"name":"곡"},"rating":3.0,"comment":"좋다"}
+                """).andExpect(status().isCreated()), "$.id");
+        patchJson("/api/reviews/" + id, token, "{\"clear\":[\"bestTrack\"]}")
+                .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_REVIEW_FIELDS"));
+        patchJson("/api/reviews/" + id, token, "{\"clear\":[\"comment\"]}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.comment").doesNotExist());
+    }
+
+    @Test
     @DisplayName("수정: 보낸 하이라이트만 변경, 빈 문자열이면 최고의 순간·전체 평가 삭제")
     void update() throws Exception {
         Number id = read(postJson("/api/reviews", token, """

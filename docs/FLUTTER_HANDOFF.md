@@ -12,6 +12,13 @@
 > - 베스트 큐레이터: Spotify 연동한 사용자만, 응답에 `userId`·`nickname` 추가 → `GET /api/curators/{userId}`, `GET /api/curators/{userId}/playlists`(인기순)
 > - 이번 주의 플리: `GET /api/feed/weekly-playlists` (기본 리뷰 50개 이상, 평균 높은 순)
 > - 별 5점 모아 보기: `GET /api/users/{id}/reviews?type=TRACK|ALBUM|PLAYLIST&minRating=5.0`
+>
+> **서버 v0.5 (안정화)** — 앱에 영향 있는 변경:
+> - **플리 수록곡은 서버가 줄 수 없습니다 (확정)**: Spotify가 2026년 2월부터 개발 모드 앱에는 본인이 만들었거나 함께 편집하는 플리의 곡 목록만 줍니다. 서버의 앱 토큰으로는 401이라서 서버 API(`/playlists/{id}/tracks`)는 **만들었다가 제거**했습니다. **사용자와 합의한 방식**: 플리 상세에서 곡 목록 대신 **"Spotify에서 열기" 버튼**(`GET /api/spotify/playlists/{id}` 응답의 `external_urls.spotify`를 `url_launcher`로 열기)을 보여 주세요. 플리 상세의 곡별 평점은 해당 없고, 앨범은 영향 없습니다.
+> - **플리 리뷰의 최고·워스트 곡**: 목록에서 고를 수 없으니 곡 검색(`/api/spotify/search?type=track`)으로 고르게 하거나 플리에서는 숨기세요(서버는 선택 항목이고, 플리에 실제로 있는 곡인지는 확인하지 않아요).
+> - **리뷰 수정 `clear`**: PATCH 본문에 `"clear": ["bestTrack", "body"]`처럼 지울 항목 이름을 보냅니다(가능: comment, bestTrack, worstTrack, underratedTrack, bestMoment, body). 같은 항목을 값과 clear에 동시에 보내면 400.
+> - **리뷰 작성 시 서버가 Spotify에서 이름·주인을 확인**해 저장합니다(앱이 보낸 값보다 우선). 없는 id는 404 `SPOTIFY_NOT_FOUND`.
+> - **`/api/spotify/**` 제한**: 사용자당 1분 60회(넘으면 429 `TOO_MANY_REQUESTS`), 같은 요청은 서버가 2분 캐시. 검색은 디바운스를 유지하세요.
 
 ## 0. 한눈에 보기
 
@@ -214,7 +221,8 @@ Figma 변수(Variables)는 정의돼 있지 않아서, 화면에서 직접 뽑�
 - "Spotify에서 듣기": `external_urls.spotify`를 `url_launcher`로 엽니다(미리듣기 없음)
 
 ### 07 플리 상세
-- 정보 + 수록곡: `GET /api/spotify/playlists/{id}` (Spotify가 플리 응답 구조를 바꿔 온 적이 있으니 **수록곡 필드 경로는 실제 응답을 한 번 찍어 보고 확정**하세요. 곡 객체가 null인 항목은 거르기)
+- 정보: `GET /api/spotify/playlists/{id}` (이름·주인·커버·`snapshot_id`·`external_urls`. **수록곡은 없음**)
+- 수록곡: **서버가 제공할 수 없음** (Spotify 개발 모드 정책). 곡 목록 대신 **"Spotify에서 열기" 버튼**: `external_urls.spotify`를 `url_launcher`로 열기. 플리 화면의 곡별 평점은 없음
 - 요약: `GET /api/items/playlist/{id}/summary` → `playlistAverages`(컨셉/흐름/발견성 평균) 카드 4개
 - **"수정됨" 배지**: 각 리뷰의 `playlistScores.snapshotId` ≠ Spotify 응답의 현재 `snapshot_id`이면 표시
 - 하단 "이 플리 평가하기" 버튼 (내 리뷰가 있으면 "내 평가 수정")
@@ -267,7 +275,7 @@ Figma 변수(Variables)는 정의돼 있지 않아서, 화면에서 직접 뽑�
   - Client ID: `120ed05f019a4d0791e7e90e300256e3` (공개값, Secret은 앱에 넣지 않음)
   - 등록된 Redirect URI: `pliview://callback`(안드로이드), `http://127.0.0.1:8080/callback`(웹 테스트). `localhost`는 Spotify가 거부합니다
   - 필요한 scope: `user-read-recently-played`, `playlist-read-private`, `playlist-modify-public`, `playlist-modify-private`
-  - 개발 모드라 Spotify Dashboard → User Management에 등록한 계정(최대 25명)만 연동 가능
+  - 개발 모드라 Spotify Dashboard → User Management에 등록한 계정만 연동 가능하고, 2026년 2월 이후 만든 앱은 **최대 5명**입니다(예전 문서의 25명은 틀렸어요)
   - 1단계(필수 기능)에서는 04 탭을 "Spotify 연동하면 볼 수 있어요" 안내 화면으로 둡니다
 
 ---

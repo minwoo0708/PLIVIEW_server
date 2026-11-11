@@ -7,6 +7,7 @@ import jakarta.validation.constraints.Size;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Set;
 
 /**
  * PATCH: null이거나 빠진 필드는 그대로 둠.
@@ -52,8 +53,24 @@ public record UpdateReviewRequest(
         String bestMoment,
 
         @Size(max = 2000, message = "전체 평가는 2000자 이하여야 합니다.")
-        String body
+        String body,
+
+        /**
+         * 지울 선택 항목 이름. 예: ["bestTrack", "body"]
+         * 가능한 값: comment, bestTrack, worstTrack, underratedTrack, bestMoment, body
+         * 같은 항목을 값으로도 보내고 clear에도 넣으면 400
+         */
+        @Size(max = 6, message = "clear에는 최대 6개까지 넣을 수 있습니다.")
+        Set<String> clear
 ) {
+
+    /** clear에 넣을 수 있는 항목 */
+    public static final Set<String> CLEARABLE =
+            Set.of("comment", "bestTrack", "worstTrack", "underratedTrack", "bestMoment", "body");
+
+    public Set<String> clearOrEmpty() {
+        return clear == null ? Set.of() : clear;
+    }
 
     public boolean hasPlaylistFields() {
         return conceptScore != null || flowScore != null || discoveryScore != null || snapshotId != null;
@@ -61,6 +78,23 @@ public record UpdateReviewRequest(
 
     public boolean hasHighlights() {
         return bestTrack != null || worstTrack != null || underratedTrack != null
-                || bestMoment != null || body != null;
+                || bestMoment != null || body != null
+                || clearOrEmpty().stream().anyMatch(name -> !name.equals("comment"));
+    }
+
+    /** clear에 들어 있는데 값도 함께 보낸 항목 */
+    public boolean isSetAndCleared(String name) {
+        if (!clearOrEmpty().contains(name)) {
+            return false;
+        }
+        return switch (name) {
+            case "comment" -> comment != null;
+            case "bestTrack" -> bestTrack != null;
+            case "worstTrack" -> worstTrack != null;
+            case "underratedTrack" -> underratedTrack != null;
+            case "bestMoment" -> bestMoment != null;
+            case "body" -> body != null;
+            default -> false;
+        };
     }
 }

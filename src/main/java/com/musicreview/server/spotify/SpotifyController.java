@@ -2,6 +2,7 @@ package com.musicreview.server.spotify;
 
 import com.musicreview.server.global.exception.BusinessException;
 import com.musicreview.server.global.exception.ErrorCode;
+import com.musicreview.server.global.security.CurrentUserId;
 import com.musicreview.server.global.validation.SpotifyId;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -33,15 +34,18 @@ public class SpotifyController {
 
     private final SpotifyClient spotifyClient;
     private final SpotifyProperties properties;
+    private final SpotifyRateLimiter rateLimiter;
 
     @GetMapping("/search")
     public ResponseEntity<byte[]> search(
+            @CurrentUserId Long userId,
             @RequestParam @Size(min = 1, max = 100, message = "검색어는 1~100자입니다.") String q,
             @RequestParam String type,
             @RequestParam(defaultValue = "20") @Min(value = 1, message = "limit은 1~50입니다.")
             @Max(value = 50, message = "limit은 1~50입니다.") int limit,
             @RequestParam(defaultValue = "0") @Min(value = 0, message = "offset은 0~1000입니다.")
             @Max(value = 1000, message = "offset은 0~1000입니다.") int offset) {
+        rateLimiter.check(userId);
         String searchType = type.strip().toLowerCase(Locale.ROOT);
         if (!SEARCH_TYPES.contains(searchType)) {
             throw new BusinessException(ErrorCode.INVALID_INPUT, "type은 track, album, artist, playlist 중 하나여야 합니다.");
@@ -58,29 +62,39 @@ public class SpotifyController {
     }
 
     @GetMapping("/tracks/{id}")
-    public ResponseEntity<byte[]> track(@PathVariable @SpotifyId String id) {
+    public ResponseEntity<byte[]> track(@CurrentUserId Long userId, @PathVariable @SpotifyId String id) {
+        rateLimiter.check(userId);
         return json(spotifyClient.get("/tracks/{id}", Map.of("id", id), withMarket()));
     }
 
     @GetMapping("/albums/{id}")
-    public ResponseEntity<byte[]> album(@PathVariable @SpotifyId String id) {
+    public ResponseEntity<byte[]> album(@CurrentUserId Long userId, @PathVariable @SpotifyId String id) {
+        rateLimiter.check(userId);
         return json(spotifyClient.get("/albums/{id}", Map.of("id", id), withMarket()));
     }
 
     @GetMapping("/artists/{id}/albums")
     public ResponseEntity<byte[]> artistAlbums(
+            @CurrentUserId Long userId,
             @PathVariable @SpotifyId String id,
             @RequestParam(defaultValue = "20") @Min(value = 1, message = "limit은 1~50입니다.")
             @Max(value = 50, message = "limit은 1~50입니다.") int limit,
             @RequestParam(defaultValue = "0") @Min(value = 0, message = "offset은 0 이상입니다.") int offset) {
+        rateLimiter.check(userId);
         Map<String, String> query = withMarket();
         query.put("limit", String.valueOf(limit));
         query.put("offset", String.valueOf(offset));
         return json(spotifyClient.get("/artists/{id}/albums", Map.of("id", id), query));
     }
 
+    /**
+     * 플리 정보(이름, 주인, 커버, snapshot_id, 팔로워, external_urls).
+     * 수록곡은 들어 있지 않습니다: Spotify 개발 모드는 앱 토큰으로 플리 곡 목록을 주지 않아서(2026년 2월 정책)
+     * 서버에서 가져올 수 없고, 앱은 "Spotify에서 열기"(external_urls.spotify)로 보여 줍니다.
+     */
     @GetMapping("/playlists/{id}")
-    public ResponseEntity<byte[]> playlist(@PathVariable @SpotifyId String id) {
+    public ResponseEntity<byte[]> playlist(@CurrentUserId Long userId, @PathVariable @SpotifyId String id) {
+        rateLimiter.check(userId);
         return json(spotifyClient.get("/playlists/{id}", Map.of("id", id), withMarket()));
     }
 

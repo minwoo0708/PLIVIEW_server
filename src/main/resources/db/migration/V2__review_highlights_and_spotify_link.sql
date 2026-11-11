@@ -1,9 +1,5 @@
--- v2 → v3: 앨범·플리 리뷰 하이라이트, Spotify 계정 연동
--- 서버(mysql 프로필, ddl-auto=update)를 켜면 컬럼은 자동으로 추가됩니다.
--- 자동 추가가 안 됐거나 ddl-auto를 validate로 바꾼 뒤라면 직접 실행:
---   mysql -u root -p -e "source C:/Users/USER/Documents/back/docs/migrations/V3__review_highlights_and_spotify_link.sql"
+-- V2: 앨범·플리 리뷰 하이라이트, Spotify 계정 연동 (API v0.4)
 
-USE music_review;
 
 ALTER TABLE users
     ADD COLUMN spotify_user_id      VARCHAR(64)  NULL AFTER profile_image_url,

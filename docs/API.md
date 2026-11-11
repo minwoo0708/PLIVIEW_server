@@ -2,7 +2,7 @@
 
 > 서버: Spring Boot 4.1 / Java 21 / MySQL 8.4
 > 클라이언트: Flutter (안드로이드 앱 + 웹)
-> 버전: v0.4 (앱 요청 반영: 앨범·플리 리뷰 하이라이트, 곡별 평점 일괄 조회, Spotify 계정 연동, 베스트 큐레이터 개편, 이번 주의 플리)
+> 버전: v0.5 (v0.4 + 리뷰 `clear`, Spotify 확인 저장, 요청 제한·캐시. 플리 수록곡은 Spotify 정책으로 제공 불가)
 
 ---
 
@@ -91,14 +91,16 @@
 | 403 | `REVIEW_FORBIDDEN` | 남의 리뷰를 수정·삭제하려 함 |
 | 404 | `USER_NOT_FOUND` | 없는 사용자 (탈퇴한 사용자의 토큰 포함) |
 | 404 | `REVIEW_NOT_FOUND` | 없는 리뷰 |
-| 404 | `SPOTIFY_NOT_FOUND` | Spotify에 없는 곡·앨범·플리 (비공개 플리 포함) |
+| 403 | `SPOTIFY_FORBIDDEN` | Spotify가 그 항목 접근을 허용하지 않음 (개발 모드 제한 등) |
+| 404 | `SPOTIFY_NOT_FOUND` | Spotify에 없는 곡·앨범·플리 (비공개 플리 포함). 리뷰 작성 때 없는 id를 보내도 같은 코드 |
 | 404 | `CURATOR_NOT_FOUND` | 큐레이터 프로필 요청 대상이 Spotify를 연동하지 않은 사용자 |
 | 404 | `NOT_FOUND` | 없는 API 경로 |
 | 405 | `METHOD_NOT_ALLOWED` | 지원하지 않는 HTTP 메서드 |
 | 409 | `EMAIL_ALREADY_EXISTS` | 이미 가입된 이메일 |
 | 409 | `REVIEW_ALREADY_EXISTS` | 같은 항목에 이미 리뷰를 씀 (항목당 1개) |
 | 409 | `SPOTIFY_ALREADY_LINKED` | 그 Spotify 계정이 이미 다른 PLIVIEW 계정에 연동됨 |
-| 429 | `SPOTIFY_RATE_LIMITED` | Spotify 호출 한도 초과, 잠시 후 재시도 |
+| 429 | `TOO_MANY_REQUESTS` | 내 요청이 너무 많음. `/api/spotify/**`는 사용자당 **1분에 60회**까지 |
+| 429 | `SPOTIFY_RATE_LIMITED` | Spotify 쪽 호출 한도 초과, 잠시 후 재시도 |
 | 502 | `SPOTIFY_UNAVAILABLE` | Spotify 서버 오류·시간 초과 |
 | 503 | `SPOTIFY_NOT_CONFIGURED` | 서버에 Spotify Client ID/Secret이 설정되지 않음 |
 | 500 | `INTERNAL_ERROR` | 그 외 서버 오류 |
@@ -134,7 +136,7 @@
 | 22 | GET | `/api/curators/ranking` | 베스트 큐레이터 (Spotify 연동한 사용자만) | ✅ | 추가 |
 | 23 | PUT | `/api/users/me/spotify` | Spotify 계정 연동 | ✅ | v0.4 |
 | 24 | DELETE | `/api/users/me/spotify` | Spotify 연동 해제 | ✅ | v0.4 |
-| 25 | GET | `/api/items/tracks/ratings` | 곡 여러 개의 평점 일괄 조회 (앨범·플리 수록곡 목록용) | ✅ | v0.4 |
+| 25 | GET | `/api/items/tracks/ratings` | 곡 여러 개의 평점 일괄 조회 (앨범 수록곡 목록용) | ✅ | v0.4 |
 | 26 | GET | `/api/feed/weekly-playlists` | 이번 주의 플리 (리뷰 많고 평점 높은 플리) | ✅ | v0.4 |
 | 27 | GET | `/api/curators/{userId}` | 큐레이터 프로필 | ✅ | v0.4 |
 | 28 | GET | `/api/curators/{userId}/playlists` | 큐레이터의 플리 목록 (인기순) | ✅ | v0.4 |
@@ -317,12 +319,16 @@
 | 8 | `GET /api/spotify/tracks/{id}` | | `GET /v1/tracks/{id}` (market=KR) |
 | 9 | `GET /api/spotify/albums/{id}` | | `GET /v1/albums/{id}` (market=KR) |
 | 10 | `GET /api/spotify/artists/{id}/albums` | `limit`(1~50, 기본 20), `offset`(기본 0) | `GET /v1/artists/{id}/albums` |
-| 11 | `GET /api/spotify/playlists/{id}` | | `GET /v1/playlists/{id}` (market=KR) |
+| 11 | `GET /api/spotify/playlists/{id}` | | `GET /v1/playlists/{id}` (market=KR). **수록곡은 들어 있지 않음** (이름·주인·커버·`snapshot_id`·팔로워·`external_urls`만) |
 
 - `{id}`는 영문·숫자 1~64자만 허용합니다. 플리 공유 링크(`https://open.spotify.com/playlist/{id}?si=...`)에서 `{id}`를 꺼내는 건 앱이 합니다.
 - 비공개 플리나 Spotify 공식(에디토리얼) 플리는 `404 SPOTIFY_NOT_FOUND`가 나올 수 있습니다.
+- **플리 수록곡은 서버가 제공할 수 없습니다.** Spotify가 2026년 2월부터 개발 모드 앱에는 **사용자 본인이 만들었거나 함께 편집하는 플리**의 곡 목록만 주도록 바꿨고(`/v1/playlists/{id}/items`), 서버가 쓰는 앱 토큰(사용자 없는 접근)으로는 401을 돌려줍니다. 그래서 앱은 플리 상세에서 곡 목록 대신 **"Spotify에서 열기"** 버튼(`external_urls.spotify`를 `url_launcher`로 열기)을 보여 줍니다. 앨범은 `GET /api/spotify/albums/{id}`에 곡 목록이 그대로 들어 있어 영향이 없습니다. (한때 있던 `GET /api/spotify/playlists/{id}/tracks`는 이 이유로 제거했습니다.)
+- **플리 리뷰의 최고·워스트 곡**은 수록곡 목록이 없어서 목록에서 고를 수 없습니다. 선택 항목이므로 앱이 **곡 검색(7번)으로 고르게** 하거나 플리에서는 숨기면 됩니다. 서버는 그 곡이 실제로 플리에 들어 있는지는 확인하지 않습니다.
+- **캐시**: 같은 요청은 서버가 2분 동안 Spotify 응답을 재사용합니다(앱 토큰 하나를 모든 사용자가 같이 쓰므로 호출 수를 줄이려고). 그래서 Spotify에서 막 바뀐 내용이 최대 2분 늦게 보일 수 있어요.
+- **요청 제한**: `/api/spotify/**`는 사용자당 1분에 60회까지입니다. 넘으면 `429 TOO_MANY_REQUESTS`. 검색은 입력을 멈춘 뒤(디바운스) 호출하세요.
 
-**에러**: 400 `INVALID_INPUT`, 404 `SPOTIFY_NOT_FOUND`, 429 `SPOTIFY_RATE_LIMITED`, 502 `SPOTIFY_UNAVAILABLE`, 503 `SPOTIFY_NOT_CONFIGURED`
+**에러**: 400 `INVALID_INPUT`, 403 `SPOTIFY_FORBIDDEN`, 404 `SPOTIFY_NOT_FOUND`, 429 `TOO_MANY_REQUESTS` / `SPOTIFY_RATE_LIMITED`, 502 `SPOTIFY_UNAVAILABLE`(서버 요청 설정 문제로 Spotify가 400을 돌려준 경우 포함), 503 `SPOTIFY_NOT_CONFIGURED`
 
 ---
 
@@ -402,6 +408,12 @@
 ```
 > "필수로 고르게 할지"는 앱 화면에서 정합니다. 서버는 모두 선택 항목으로 받습니다.
 
+**Spotify 확인 (v0.5)**: 서버가 `spotifyId`로 Spotify에서 **진짜 정보를 확인**해 저장합니다.
+- `item.name` / `subtitle` / `imageUrl`은 **Spotify에서 받은 값이 우선**이고, 앱이 보낸 값은 Spotify에 연결할 수 없을 때(설정 없음, 일시 장애, 호출 한도)만 대신 씁니다. 그래서 앱이 이름을 마음대로 보내도 그대로 저장되지 않아요.
+- 플리의 `ownerSpotifyId`도 Spotify의 `owner.id`로 저장됩니다(큐레이터 랭킹 조작 방지). 앱이 보낸 값은 Spotify 확인이 안 될 때만 씁니다. `snapshotId`를 안 보내면 Spotify의 현재 값을 저장합니다.
+- Spotify에 **없는 id**면 리뷰를 만들지 않고 `404 SPOTIFY_NOT_FOUND`.
+- 앱은 지금처럼 `item`을 보내면 됩니다(필수는 그대로).
+
 **201 Created**: `ReviewResponse`, 헤더 `Location: /api/reviews/{id}`
 **에러**: 400 `INVALID_INPUT` / `INVALID_REVIEW_FIELDS`, 409 `REVIEW_ALREADY_EXISTS`
 
@@ -435,8 +447,13 @@
 | comment | `""`(빈 문자열)을 보내면 한 줄 평 삭제 |
 | tags | 보내면 **전체 교체**, `[]`이면 모두 삭제 |
 | conceptScore, flowScore, discoveryScore, snapshotId | 플리 리뷰만 가능, 곡·앨범에 보내면 400 `INVALID_REVIEW_FIELDS` |
-| bestTrack, worstTrack, underratedTrack | 보내면 교체 (지우기는 지원 안 함, 다른 곡으로 바꾸기만). 규칙은 작성 때와 같음 |
+| bestTrack, worstTrack, underratedTrack | 보내면 다른 곡으로 교체. 지우려면 `clear`에 넣기. 규칙은 작성 때와 같음 |
 | bestMoment, body | 보내면 교체, `""`이면 삭제 |
+| **clear** (v0.5) | 지울 항목 이름 배열. 가능한 값: `comment`, `bestTrack`, `worstTrack`, `underratedTrack`, `bestMoment`, `body`. 곡 하이라이트는 값을 못 지웠는데 이걸로 지웁니다. 같은 항목을 값과 `clear`에 **동시에** 넣거나 모르는 이름이면 400 `INVALID_INPUT`. 곡 리뷰에서 하이라이트 이름을 넣으면 400 `INVALID_REVIEW_FIELDS` |
+
+```json
+{ "clear": ["bestTrack", "underratedTrack"], "bestMoment": "새 순간" }
+```
 
 **200 OK**: `ReviewResponse`
 **에러**: 400 `INVALID_INPUT` / `INVALID_REVIEW_FIELDS`, 403 `REVIEW_FORBIDDEN`, 404 `REVIEW_NOT_FOUND`
@@ -628,7 +645,7 @@
 **200 OK**: `UserResponse` (`spotify`에 연동 정보가 채워짐). 같은 계정으로 다시 보내도 성공합니다.
 **에러**: 400 `INVALID_INPUT`, 401 `SPOTIFY_TOKEN_INVALID` (토큰 만료·잘못됨, 또는 개발 모드에서 Dashboard 사용자 목록에 없는 계정. 메시지가 다름), 409 `SPOTIFY_ALREADY_LINKED`, 502 `SPOTIFY_UNAVAILABLE`
 
-> Spotify 개발 모드에서는 Dashboard → User Management에 등록한 계정(최대 25명)만 연동할 수 있습니다.
+> Spotify 개발 모드에서는 Dashboard → User Management에 등록한 계정만 연동할 수 있습니다. 2026년 2월 이후 만든 개발 모드 앱은 **최대 5명**(앱 소유자는 Premium)이라서, Spotify 연동과 베스트 큐레이터는 최대 5명까지만 쓸 수 있습니다. 검색·곡/앨범 정보·리뷰는 이 제한과 상관없습니다.
 
 ---
 
@@ -640,7 +657,7 @@
 ---
 
 ### 25. 곡별 평점 일괄 조회 — `GET /api/items/tracks/ratings`
-인증: ✅ · 앨범·플리 화면의 수록곡 목록에 곡마다 평점 표시
+인증: ✅ · 앨범 화면의 수록곡 목록에 곡마다 평점 표시 (플리는 수록곡 목록을 서버가 못 가져와서 해당 없음. 11번 참고)
 
 | 쿼리 | 필수 | 설명 |
 |---|---|---|
@@ -733,7 +750,7 @@
 
 | # | 내용 | 이유 |
 |---|---|---|
-| 1 | 회원가입·로그인을 Spotify 대신 **이메일 + 비밀번호**로 직접 구현 | Spotify 계정 없이도 가입 가능, 개발 모드 25명 제한을 피함 |
+| 1 | 회원가입·로그인을 Spotify 대신 **이메일 + 비밀번호**로 직접 구현 | Spotify 계정 없이도 가입 가능, 개발 모드 사용자 수 제한(5명)을 로그인에서 피함 |
 | 2 | 검색·곡/앨범/플리 정보는 **서버가 Client Credentials로 대신 호출** | 앱(특히 웹)에 Client Secret을 둘 수 없음 |
 | 3 | 최근 재생·내 플리·팔로우·플리 생성은 앱이 Spotify 연동(PKCE) 후 직접 호출 | 사용자 본인 Spotify 권한이 필요 |
 | 4 | `reviews`에 표시용 컬럼 `item_name`, `item_subtitle`, `item_image_url` | 피드·프로필·랭킹에서 Spotify 재호출 방지 |
@@ -745,3 +762,6 @@
 | 10 | 베스트 큐레이터 = **Spotify를 연동한 사용자**만 | 플리 주인이 실제 PLIVIEW 사용자여야 프로필로 이어짐 |
 | 11 | Spotify 연동은 앱이 받은 토큰을 서버가 `/v1/me`로 확인만 하고 **토큰은 저장 안 함** | 서버가 사용자 Spotify 권한을 들고 있을 이유가 없음 |
 | 12 | 이번 주의 플리 기본 기준은 **리뷰 50개 이상, 전체 기간**, `days`로 기간 제한 가능 | 사용자 요청(리뷰 50개 이상). 초반 데이터가 적을 때 확인하려면 `minReviews`를 낮춰 호출 |
+| 13 | 리뷰 작성 시 표시 정보·플리 주인은 **Spotify에서 확인한 값 우선** | 앱이 보낸 이름·주인을 그대로 믿으면 이름 조작과 큐레이터 랭킹 조작이 가능 |
+| 14 | `/api/spotify/**` 응답 2분 캐시 + 사용자당 1분 60회 제한 | 앱 토큰 하나를 모든 사용자가 같이 써서, 한 명의 연타가 전체의 429가 되는 것을 막음 |
+| 15 | MySQL 스키마는 **Flyway**로 관리, 운영은 `ddl-auto: validate` | `update`는 컬럼 삭제·타입·인덱스 변경을 못 따라감 |
