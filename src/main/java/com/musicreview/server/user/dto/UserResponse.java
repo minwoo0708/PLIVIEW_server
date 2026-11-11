@@ -12,6 +12,7 @@ public record UserResponse(
         String nickname,
         String profileImageUrl,
         SpotifyAccount spotify,
+        UserSettingsResponse settings,
         OffsetDateTime createdAt
 ) {
 
@@ -32,6 +33,7 @@ public record UserResponse(
                 user.getNickname(),
                 user.getProfileImageUrl(),
                 SpotifyAccount.from(user),
+                UserSettingsResponse.from(user),
                 TimeUtils.toOffset(user.getCreatedAt())
         );
     }

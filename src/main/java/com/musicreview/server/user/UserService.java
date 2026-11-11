@@ -7,6 +7,8 @@ import com.musicreview.server.user.domain.User;
 import com.musicreview.server.user.domain.UserRepository;
 import com.musicreview.server.user.dto.ChangePasswordRequest;
 import com.musicreview.server.user.dto.UpdateMeRequest;
+import com.musicreview.server.user.dto.UpdateSettingsRequest;
+import com.musicreview.server.user.dto.UserSettingsResponse;
 import com.musicreview.server.user.dto.UserResponse;
 import com.musicreview.server.user.dto.WithdrawRequest;
 import lombok.RequiredArgsConstructor;
@@ -37,6 +39,19 @@ public class UserService {
             user.changeProfileImageUrl(request.profileImageUrl());
         }
         return UserResponse.from(user);
+    }
+
+    @Transactional(readOnly = true)
+    public UserSettingsResponse getSettings(Long userId) {
+        return UserSettingsResponse.from(getUser(userId));
+    }
+
+    /** 보낸 항목만 바꿈. 아무것도 안 보내면 현재 값을 그대로 돌려줌 */
+    @Transactional
+    public UserSettingsResponse updateSettings(Long userId, UpdateSettingsRequest request) {
+        User user = getUser(userId);
+        user.changeSettings(request.themeMode(), request.textScale());
+        return UserSettingsResponse.from(user);
     }
 
     @Transactional

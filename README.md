@@ -13,7 +13,7 @@ Spotify의 곡 · 앨범 · 플레이리스트에 별점과 리뷰를 남기는 
 ![Flyway](https://img.shields.io/badge/Flyway-12-CC0200?logo=flyway&logoColor=white)
 ![JWT](https://img.shields.io/badge/Auth-JWT%20%2B%20BCrypt-000000?logo=jsonwebtokens&logoColor=white)
 ![Spotify](https://img.shields.io/badge/Spotify%20Web%20API-1DB954?logo=spotify&logoColor=white)
-![Tests](https://img.shields.io/badge/integration%20tests-68-brightgreen)
+![Tests](https://img.shields.io/badge/integration%20tests-77-brightgreen)
 
 [📱 Flutter 앱 저장소](https://github.com/minwoo0708/PLIVIEW_app) · [📘 API 명세서](docs/API.md) · [🗄 DB 스키마](docs/schema.sql)
 
@@ -126,7 +126,7 @@ erDiagram
 | 마이그레이션 | **Flyway** | 스키마 변경 이력을 파일로 관리 |
 | 캐시 | **Caffeine** | Spotify 응답 · 요청 제한 카운터 |
 | 외부 연동 | **Spotify Web API** (`RestClient`) | 검색 · 곡 · 앨범 · 플리 정보 |
-| 빌드 · 테스트 | **Gradle** · JUnit 5 · MockMvc | 통합 테스트 68개 |
+| 빌드 · 테스트 | **Gradle** · JUnit 5 · MockMvc | 통합 테스트 77개 |
 | 협업 도구 | Postman · IntelliJ HTTP Client | 요청 모음 포함 |
 
 
@@ -136,7 +136,7 @@ erDiagram
 요청·응답 예시와 에러 코드는 **[docs/API.md](docs/API.md)**에 있어요.
 
 <details>
-<summary><b>API 29개 전체 보기</b></summary>
+<summary><b>API 31개 전체 보기</b></summary>
 
 <br>
 
@@ -149,6 +149,7 @@ erDiagram
 | | `PATCH /api/users/me/password` | 비밀번호 변경 |
 | | `DELETE /api/users/me` | 회원 탈퇴 (리뷰도 삭제) |
 | | `PUT` `DELETE /api/users/me/spotify` | Spotify 계정 연동 · 해제 |
+| | `GET` `PUT /api/users/me/settings` | 화면 설정(다크모드 · 글자 크기) 조회 · 저장 |
 | Spotify | `GET /api/spotify/search` | 곡·앨범·아티스트·플리 검색 |
 | | `GET /api/spotify/tracks/{id}` | 곡 정보 |
 | | `GET /api/spotify/albums/{id}` | 앨범 정보 + 수록곡 |
@@ -196,7 +197,7 @@ erDiagram
 - 스키마는 **Flyway**로만 바꾸고, mysql 프로필의 Hibernate는 엔티티와 테이블이 맞는지 **검사만**(`validate`) 합니다.
 
 **🧪 테스트**
-- 실제 HTTP 요청처럼 호출하는 **MockMvc 통합 테스트 68개**. 인증, 검증, 권한, 집계, 페이지, 에러 형식을 확인합니다.
+- 실제 HTTP 요청처럼 호출하는 **MockMvc 통합 테스트 77개**. 인증, 검증, 권한, 집계, 페이지, 에러 형식을 확인합니다.
 - Spotify는 테스트 안에서 띄운 **가짜 HTTP 서버**로 대신해서, 토큰 캐시 · 응답 캐시 · 쿼리 인코딩 · 오류 변환을 외부 의존 없이 검증합니다.
 
 
@@ -217,7 +218,7 @@ cd PLIVIEW_server
 
 ### MySQL로 실행
 
-**테이블은 서버가 만듭니다.** mysql 프로필로 켜면 [Flyway](https://flywaydb.org)가 `src/main/resources/db/migration`의 `V1`, `V2`, `V3` ...을 순서대로 적용하니, 빈 DB만 한 번 만들면 돼요.
+**테이블은 서버가 만듭니다.** mysql 프로필로 켜면 [Flyway](https://flywaydb.org)가 `src/main/resources/db/migration`의 `V1` ~ `V4` ...를 순서대로 적용하니, 빈 DB만 한 번 만들면 돼요.
 
 ```bash
 mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS music_review DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE utf8mb4_unicode_ci"
@@ -251,7 +252,7 @@ Spotify 검색·정보 조회를 쓰려면 `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_
 | `CORS_ALLOWED_ORIGINS` | `http://localhost:*,http://127.0.0.1:*` | 웹 클라이언트 배포 주소를 쉼표로 추가 |
 | `FLYWAY_BASELINE_VERSION` | `2` | Flyway 도입 전에 만든 DB를 몇 번 마이그레이션까지 적용된 것으로 볼지 (빈 DB는 영향 없음) |
 
-- **스키마를 바꿀 때**는 엔티티를 고치고 새 마이그레이션(`V4__설명.sql`)을 추가합니다. 이미 적용된 `V1~V3`은 **수정하지 마세요**(체크섬 불일치로 서버 시작이 막혀요).
+- **스키마를 바꿀 때**는 엔티티를 고치고 새 마이그레이션(`V5__설명.sql`)을 추가합니다. 이미 적용된 `V1~V4`은 **수정하지 마세요**(체크섬 불일치로 서버 시작이 막혀요).
 - Flyway 도입 전에 만든 DB는 처음 켤 때 "V2까지 적용"으로 보고 V3만 적용합니다. 더 오래된 DB는 `FLYWAY_BASELINE_VERSION=1`.
 - `docs/schema.sql`은 최종 스키마를 보여 주는 **참고용**이라 직접 실행하지 않아도 됩니다.
 - 비밀번호나 키는 절대 커밋하지 마세요. `.env`, `http/http-client.private.env.json`, Postman 로컬 워크스페이스 파일은 `.gitignore`에 등록돼 있습니다.
@@ -294,7 +295,7 @@ src/main
 │  └─ spotify       Spotify 대리 조회 · 토큰 · 응답 캐시 · 요청 제한 · 항목 확인
 └─ resources
    ├─ application*.yml    공통 / local(H2) / mysql 설정
-   └─ db/migration        Flyway 마이그레이션 (V1 ~ V3)
+   └─ db/migration        Flyway 마이그레이션 (V1 ~ V4)
 docs/        API 명세 · 스키마 · Flutter 인수인계서 · 디자인 미리보기
 postman/     Postman 컬렉션과 환경
 http/        IntelliJ HTTP Client 요청 모음

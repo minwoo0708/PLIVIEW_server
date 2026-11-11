@@ -118,6 +118,38 @@
           }
         },
         {
+          "name": "내 화면 설정 조회",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 + themeMode/textScale', () => {",
+            "    pm.response.to.have.status(200);",
+            "    pm.expect(pm.response.json()).to.have.all.keys('themeMode', 'textScale');",
+            "});"
+          ] } }],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/users/me/settings",
+            "description": "저장한 적이 없으면 SYSTEM, 1.00"
+          }
+        },
+        {
+          "name": "내 화면 설정 저장",
+          "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
+            "pm.test('200 + 저장된 값', () => {",
+            "    pm.response.to.have.status(200);",
+            "    pm.expect(pm.response.json().themeMode).to.eql('DARK');",
+            "    pm.expect(pm.response.json().textScale).to.eql(1.15);",
+            "});"
+          ] } }],
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": { "mode": "raw", "raw": "{\n  \"themeMode\": \"DARK\",\n  \"textScale\": 1.15\n}", "options": { "raw": { "language": "json" } } },
+            "url": "{{baseUrl}}/api/users/me/settings",
+            "description": "보낸 항목만 바뀝니다. themeMode: SYSTEM/LIGHT/DARK, textScale: 0.8~1.5"
+          }
+        },
+        {
           "name": "[실패] 틀린 비밀번호 로그인 → 401",
           "event": [{ "listen": "test", "script": { "type": "text/javascript", "exec": [
             "pm.test('401 LOGIN_FAILED', () => {",
