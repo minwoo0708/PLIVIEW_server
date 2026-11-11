@@ -2,7 +2,6 @@ package com.musicreview.server.user;
 
 import com.musicreview.server.global.exception.BusinessException;
 import com.musicreview.server.global.exception.ErrorCode;
-import com.musicreview.server.review.domain.ReviewRepository;
 import com.musicreview.server.user.domain.User;
 import com.musicreview.server.user.domain.UserRepository;
 import com.musicreview.server.user.dto.ChangePasswordRequest;
@@ -12,6 +11,7 @@ import com.musicreview.server.user.dto.UserSettingsResponse;
 import com.musicreview.server.user.dto.UserResponse;
 import com.musicreview.server.user.dto.WithdrawRequest;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class UserService {
 
     private final UserRepository userRepository;
-    private final ReviewRepository reviewRepository;
+    private final ApplicationEventPublisher eventPublisher;
     private final PasswordEncoder passwordEncoder;
 
     @Transactional(readOnly = true)
@@ -61,12 +61,12 @@ public class UserService {
         user.changePasswordHash(passwordEncoder.encode(request.newPassword()));
     }
 
-    /** 계정과 내가 쓴 리뷰(태그 포함)를 모두 삭제 */
+    /** 계정을 삭제하고, 내가 쓴 데이터는 UserWithdrawnEvent를 받는 쪽(리뷰 등)이 함께 삭제 */
     @Transactional
     public void withdraw(Long userId, WithdrawRequest request) {
         User user = getUser(userId);
         verifyPassword(user, request.password());
-        reviewRepository.deleteAll(reviewRepository.findByUserId(userId));
+        eventPublisher.publishEvent(new UserWithdrawnEvent(userId));
         userRepository.delete(user);
     }
 
