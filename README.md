@@ -10,7 +10,7 @@ Spotify의 곡·앨범·플레이리스트에 별점과 리뷰를 남기는 앱 
 | DB | MySQL 8.4 (기본 실행·테스트는 H2 메모리 DB) |
 | 빌드 | Gradle (wrapper 포함) |
 | 인증 | 이메일 + 비밀번호(BCrypt) → 서버 JWT(HS256, 7일) |
-| 테스트 | MockMvc 통합 테스트 67개 (`./gradlew test`) |
+| 테스트 | MockMvc 통합 테스트 68개 (`./gradlew test`) |
 
 ## 문서
 
@@ -138,10 +138,11 @@ IntelliJ에서는 **Run → Edit Configurations → Environment variables**에 �
 | 8 | 권장: 피드, 인기 항목, 유저 리뷰·통계 | ✅ |
 | 9 | 추가: 큐레이터 랭킹 | ✅ |
 | 9-1 | 앱 요청(v0.4): 리뷰 하이라이트, 곡별 평점 일괄 조회, Spotify 연동, 베스트 큐레이터 개편·프로필, 이번 주의 플리 | ✅ |
-| 9-2 | 안정화(v0.5): 플리 수록곡 API, 리뷰 `clear`, Spotify 확인 저장, 응답 캐시·요청 제한, Flyway | ✅ |
+| 9-2 | 안정화(v0.5): 리뷰 `clear`, Spotify 확인 저장, 응답 캐시·요청 제한, Flyway | ✅ |
 | 10 | 배포, CI(GitHub Actions) | ⬜ |
 
 ## 참고
 
 - Spotify 콘텐츠를 보여줄 때는 Spotify 로고와 원본 링크를 표시해야 합니다(브랜딩 가이드라인).
-- 사용자 본인 Spotify 계정이 필요한 기능(최근 재생 등)은 앱이 Spotify 연동(PKCE)으로 직접 호출하며, Spotify 개발 모드에서는 Dashboard에 등록한 테스트 유저(최대 25명)만 연동할 수 있습니다.
+- 사용자 본인 Spotify 계정이 필요한 기능(최근 재생 등)은 앱이 Spotify 연동(PKCE)으로 직접 호출하며, Spotify 개발 모드에서는 Dashboard에 등록한 테스트 유저만 연동할 수 있고, 2026년 2월 이후 만든 앱은 **최대 5명**입니다.
+- **플리 수록곡은 보여 줄 수 없습니다.** Spotify가 개발 모드 앱에는 본인이 만들었거나 함께 편집하는 플리의 곡 목록만 주도록 바꿔서, 앱 토큰을 쓰는 서버로는 받을 수 없어요. 그래서 앱은 플리 상세에서 "Spotify에서 열기" 버튼을 보여 줍니다.
