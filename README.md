@@ -211,3 +211,104 @@ erDiagram
 - 실제 HTTP 요청처럼 호출하는 **MockMvc 통합 테스트 68개**. 인증, 검증, 권한, 집계, 페이지, 에러 형식을 확인합니다.
 - Spotify는 테스트 안에서 띄운 **가짜 HTTP 서버**로 대신해서, 토큰 캐시 · 응답 캐시 · 쿼리 인코딩 · 오류 변환을 외부 의존 없이 검증합니다.
 
+
+## 🚀 실행 방법
+
+### 1분 만에 실행 (H2 메모리 DB)
+
+설치할 것 없이 JDK 21만 있으면 됩니다. 서버를 끄면 데이터는 사라져요.
+
+```bash
+git clone https://github.com/minwoo0708/PLIVIEW_server.git
+cd PLIVIEW_server
+./gradlew bootRun
+```
+
+- 서버: http://localhost:8080 · 확인: http://localhost:8080/api/hello
+- H2 콘솔: http://localhost:8080/h2-console (JDBC URL `jdbc:h2:mem:music_review`, 사용자 `sa`)
+
+### MySQL로 실행
+
+**테이블은 서버가 만듭니다.** mysql 프로필로 켜면 [Flyway](https://flywaydb.org)가 `src/main/resources/db/migration`의 `V1`, `V2`, `V3` ...을 순서대로 적용하니, 빈 DB만 한 번 만들면 돼요.
+
+```bash
+mysql -u root -p -e "CREATE DATABASE IF NOT EXISTS music_review DEFAULT CHARACTER SET utf8mb4 DEFAULT COLLATE utf8mb4_unicode_ci"
+```
+
+```powershell
+# PowerShell
+$env:SPRING_PROFILES_ACTIVE="mysql"
+$env:DB_PASSWORD="MySQL root 비밀번호"
+$env:JWT_SECRET="32자 이상 임의 문자열"
+./gradlew bootRun
+```
+
+IntelliJ에서는 **Run → Edit Configurations → Environment variables**에 같은 값을 넣으면 됩니다.
+Spotify 검색·정보 조회를 쓰려면 `SPOTIFY_CLIENT_ID`, `SPOTIFY_CLIENT_SECRET`도 필요하고, 없으면 `/api/spotify/**`만 503을 돌려줍니다(나머지는 정상).
+
+<details>
+<summary><b>환경변수 · Flyway 안내 전체 보기</b></summary>
+
+<br>
+
+| 환경변수 | 기본값 | 설명 |
+|---|---|---|
+| `SPRING_PROFILES_ACTIVE` | `local` | `local`(H2) 또는 `mysql` |
+| `DB_HOST` / `DB_PORT` / `DB_NAME` | `localhost` / `3306` / `music_review` | mysql 프로필 |
+| `DB_USERNAME` | `root` | mysql 프로필 |
+| `DB_PASSWORD` | (없음) | mysql 프로필, **필수** |
+| `JWT_SECRET` | local만 개발용 기본값 | 32바이트 이상, mysql 프로필에서는 **필수** |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | (없음) | [Spotify Dashboard](https://developer.spotify.com/dashboard)에서 발급 |
+| `SPOTIFY_RATE_LIMIT_PER_MINUTE` | `60` | 사용자 한 명이 1분에 보낼 수 있는 `/api/spotify/**` 요청 수 |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:*,http://127.0.0.1:*` | Flutter 웹 배포 주소를 쉼표로 추가 |
+| `FLYWAY_BASELINE_VERSION` | `2` | Flyway 도입 전에 만든 DB를 몇 번 마이그레이션까지 적용된 것으로 볼지 (빈 DB는 영향 없음) |
+
+- **스키마를 바꿀 때**는 엔티티를 고치고 새 마이그레이션(`V4__설명.sql`)을 추가합니다. 이미 적용된 `V1~V3`은 **수정하지 마세요**(체크섬 불일치로 서버 시작이 막혀요).
+- Flyway 도입 전에 만든 DB는 처음 켤 때 "V2까지 적용"으로 보고 V3만 적용합니다. 더 오래된 DB는 `FLYWAY_BASELINE_VERSION=1`.
+- `docs/schema.sql`은 최종 스키마를 보여 주는 **참고용**이라 직접 실행하지 않아도 됩니다.
+- 비밀번호나 키는 절대 커밋하지 마세요. `.env`, `http/http-client.private.env.json`, Postman 로컬 워크스페이스 파일은 `.gitignore`에 등록돼 있습니다.
+
+</details>
+
+### Flutter에서 접속
+
+| 실행 환경 | Base URL |
+|---|---|
+| Flutter 웹 (Chrome) | `http://localhost:8080` (CORS 허용) |
+| 안드로이드 에뮬레이터 | `http://10.0.2.2:8080` |
+| 실제 폰 (같은 Wi-Fi) | `http://<PC의 IP>:8080` |
+
+## 🧪 테스트
+
+```bash
+./gradlew test
+```
+
+**Postman으로 직접 호출해 보기**
+1. Postman → **Import** → [`postman/`](postman/) 폴더의 두 파일(컬렉션 + `PLIVIEW local` 환경)
+2. 서버를 켜고 **회원가입**(처음) 또는 **로그인**을 실행하면 `jwt`가 자동 저장돼 나머지 요청에 붙어요.
+3. `[실패]`로 시작하는 요청은 에러 응답(400·401·409)이 명세대로 나오는지 확인하는 용도입니다. (`9. 탈퇴` 폴더는 계정이 지워지니 Run collection에서 빼세요.)
+
+IntelliJ를 쓴다면 [`http/api.http`](http/api.http)로도 같은 요청을 보낼 수 있습니다.
+
+## 🗂 프로젝트 구조
+
+```
+src/main
+├─ java/com/musicreview/server
+│  ├─ global        공통: 보안(JWT, CORS), 에러 응답, 검증 어노테이션, 페이지 응답, 시간 기록
+│  ├─ auth          회원가입 · 로그인
+│  ├─ user          내 정보 · 비밀번호 · 탈퇴 · Spotify 연동 · 유저 프로필(리뷰·통계)
+│  ├─ review        리뷰 CRUD · 태그 · 하이라이트 · 집계 쿼리
+│  ├─ item          항목별 리뷰 목록 · 요약(평균·분포) · 곡별 평점
+│  ├─ feed          최신 피드 · 인기 항목 · 이번 주의 플리
+│  ├─ curator       베스트 큐레이터 랭킹 · 프로필
+│  └─ spotify       Spotify 대리 조회 · 토큰 · 응답 캐시 · 요청 제한 · 항목 확인
+└─ resources
+   ├─ application*.yml    공통 / local(H2) / mysql 설정
+   └─ db/migration        Flyway 마이그레이션 (V1 ~ V3)
+docs/        API 명세 · 스키마 · Flutter 인수인계서 · 디자인 미리보기
+postman/     Postman 컬렉션과 환경
+http/        IntelliJ HTTP Client 요청 모음
+```
+
