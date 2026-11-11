@@ -5,6 +5,11 @@
 
 ---
 
+> **2026-11-11 추가 (서버 v0.6)**: 화면 설정 저장 API. 상세는 `docs/API.md` 29·30번.
+> - `GET /api/users/me/settings` → `{themeMode: SYSTEM|LIGHT|DARK, textScale}` (기본 `SYSTEM`, `1.00`)
+> - `PUT /api/users/me/settings` → 보낸 항목만 변경(둘 다 선택). `textScale`은 0.8~1.5, 벗어나면 400 `INVALID_INPUT`
+> - 로그인·회원가입·`GET /api/users/me` 응답의 `UserResponse.settings`에도 같은 값이 들어 있어 로그인 직후 따로 부를 필요 없음
+>
 > **2026-11-10 추가 (서버 v0.4)**: 앱에서 요청한 서버 기능이 구현됐습니다. 상세는 `docs/API.md` 23~28번과 12·14·21·22번 변경 부분을 보세요.
 > - 앨범·플리 리뷰 하이라이트: `bestTrack`, `worstTrack`, `underratedTrack`(앨범만), `bestMoment`, `body`(여러 줄) → 응답 `highlights`
 > - 수록곡 곡별 평점: `GET /api/items/tracks/ratings?spotifyIds=a,b,c` (최대 100개, `myRating` 포함)
@@ -262,6 +267,7 @@ Figma 변수(Variables)는 정의돼 있지 않아서, 화면에서 직접 뽑�
 - 닉네임 변경 `PATCH /api/users/me {"nickname"}` / 프로필 사진은 **URL만** 저장 가능(업로드 API 없음 → 일단 숨기거나 기본 아바타)
 - 비밀번호 변경 `PATCH /api/users/me/password {"currentPassword","newPassword"}` → 204
 - Spotify 연동 행 → 5장 2단계(그 전까지는 "준비 중")
+- 다크모드·글자 크기 → `GET`/`PUT /api/users/me/settings` (v0.6, 로그인 응답의 `settings`로 초기값 적용)
 - 로그아웃 → 토큰 삭제 → 로그인 화면
 - 회원 탈퇴 `DELETE /api/users/me` 본문 `{"password"}` → 204 → 토큰 삭제 → 시작 화면. "내가 쓴 리뷰도 모두 삭제됩니다" 확인창 필수
 

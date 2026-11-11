@@ -2,7 +2,7 @@
 
 > 서버: Spring Boot 4.1 / Java 21 / MySQL 8.4
 > 클라이언트: Flutter (안드로이드 앱 + 웹)
-> 버전: v0.5 (v0.4 + 리뷰 `clear`, Spotify 확인 저장, 요청 제한·캐시. 플리 수록곡은 Spotify 정책으로 제공 불가)
+> 버전: v0.6 (v0.5 + 화면 설정(다크모드·글자 크기) 저장 API. v0.5: 리뷰 `clear`, Spotify 확인 저장, 요청 제한·캐시, 플리 수록곡은 Spotify 정책으로 제공 불가)
 
 ---
 
@@ -140,6 +140,8 @@
 | 26 | GET | `/api/feed/weekly-playlists` | 이번 주의 플리 (리뷰 많고 평점 높은 플리) | ✅ | v0.4 |
 | 27 | GET | `/api/curators/{userId}` | 큐레이터 프로필 | ✅ | v0.4 |
 | 28 | GET | `/api/curators/{userId}/playlists` | 큐레이터의 플리 목록 (인기순) | ✅ | v0.4 |
+| 29 | GET | `/api/users/me/settings` | 내 화면 설정 조회 (다크모드, 글자 크기) | ✅ | v0.6 |
+| 30 | PUT | `/api/users/me/settings` | 내 화면 설정 저장 (보낸 항목만 변경) | ✅ | v0.6 |
 
 **앱이 Spotify를 직접 호출하는 기능**: 최근 재생곡, 내 Spotify 플리 목록, 플리 팔로우, 리뷰 기반 플리 생성은 사용자 본인의 Spotify 계정이 필요합니다. 앱이 PKCE로 Spotify에 직접 로그인해서 호출합니다. 그때 받은 토큰을 `PUT /api/users/me/spotify`로 한 번 보내면 서버가 계정을 확인해 **연동 상태로 저장**합니다(토큰은 저장하지 않음). 연동한 사용자만 베스트 큐레이터가 됩니다.
 
@@ -155,11 +157,13 @@
   "nickname": "음악덕후",
   "profileImageUrl": null,
   "spotify": { "userId": "smedjan", "displayName": "Smedjan" },
+  "settings": { "themeMode": "DARK", "textScale": 1.15 },
   "createdAt": "2026-11-10T14:30:00+09:00"
 }
 ```
 - `email`은 `GET/PATCH /api/users/me`와 회원가입·로그인 응답에만 들어갑니다. 다른 사람 정보(리뷰 작성자 등)에는 없습니다.
 - `spotify`: Spotify를 연동했으면 계정 정보, 안 했으면 `null`. **앱은 이 값으로 프로필 화면(연동 전/후)을 나눕니다.**
+- `settings`: 화면 설정(다크모드, 글자 크기). 저장한 적이 없으면 `{ "themeMode": "SYSTEM", "textScale": 1.00 }`. **본인 응답에만** 들어갑니다(29·30번 참고).
 
 ### 3.2 `ReviewResponse`
 ```json
@@ -746,6 +750,42 @@
 
 ---
 
+### 29. 내 화면 설정 조회 — `GET /api/users/me/settings`
+인증: ✅ · 다크모드와 글자 크기를 계정에 저장해서 기기를 바꿔도 이어지게 합니다.
+
+**200 OK**
+```json
+{ "themeMode": "SYSTEM", "textScale": 1.00 }
+```
+- 한 번도 저장하지 않았으면 기본값 **`SYSTEM`, `1.00`** 입니다.
+- `themeMode`: `SYSTEM`(기기 설정을 따름) / `LIGHT` / `DARK`
+- `textScale`: 글자 크기 배율. 소수 둘째 자리까지(`1.15`)
+- 같은 값이 `UserResponse.settings`(로그인·회원가입·내 정보 응답)에도 들어 있어서, 로그인 직후에는 이 API를 따로 부르지 않아도 됩니다. 다른 사람에게 보이는 정보(프로필, 리뷰 작성자)에는 들어가지 않아요.
+
+---
+
+### 30. 내 화면 설정 저장 — `PUT /api/users/me/settings`
+인증: ✅
+
+**두 항목 모두 선택이고, 보낸 항목만 바뀝니다**(PUT이지만 부분 수정). 아무것도 안 보내면(`{}`) 현재 값을 그대로 돌려줍니다.
+
+**Request**
+```json
+{ "themeMode": "DARK", "textScale": 1.15 }
+```
+| 필드 | 필수 | 규칙 |
+|---|---|---|
+| themeMode | 선택 | `SYSTEM` / `LIGHT` / `DARK`만 허용 (대문자, 그 밖의 값은 400) |
+| textScale | 선택 | **0.8 ~ 1.5** (0.05 단위일 필요 없음). 소수 셋째 자리부터는 반올림(`1.153` → `1.15`). 범위 밖이면 400 |
+
+**200 OK**: 저장된 현재 값 (조회와 같은 형식)
+```json
+{ "themeMode": "DARK", "textScale": 1.15 }
+```
+**에러**: 400 `INVALID_INPUT` (범위 밖 배율, 허용되지 않는 `themeMode`, 숫자가 아닌 `textScale`. 이때 값은 바뀌지 않음), 401 `UNAUTHORIZED`
+
+---
+
 ## 5. 결정 사항
 
 | # | 내용 | 이유 |
@@ -765,3 +805,4 @@
 | 13 | 리뷰 작성 시 표시 정보·플리 주인은 **Spotify에서 확인한 값 우선** | 앱이 보낸 이름·주인을 그대로 믿으면 이름 조작과 큐레이터 랭킹 조작이 가능 |
 | 14 | `/api/spotify/**` 응답 2분 캐시 + 사용자당 1분 60회 제한 | 앱 토큰 하나를 모든 사용자가 같이 써서, 한 명의 연타가 전체의 429가 되는 것을 막음 |
 | 15 | MySQL 스키마는 **Flyway**로 관리, 운영은 `ddl-auto: validate` | `update`는 컬럼 삭제·타입·인덱스 변경을 못 따라감 |
+| 16 | 화면 설정은 별도 테이블이 아니라 `users`의 컬럼(`theme_mode`, `text_scale`)으로 저장, `PUT`은 보낸 항목만 변경 | 항목이 두 개뿐이고 항상 회원과 1:1이라 조인이 필요 없음. 앱이 항목 하나만 바꿔 보내도 다른 값이 초기화되지 않게 함 |
